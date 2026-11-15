@@ -1,5 +1,14 @@
 # Microsoft account sign-in and online-mode play
 
+> **Note for this fork (2026-11-15):** this fork removed the launcher's owner gate. The launcher
+> starts the game **offline for everyone**, with or without a signed-in account; a "doesn't own"
+> answer no longer blocks the game, and the gate's screen never covers the window by itself. What
+> is unchanged: this fork has no `HORIZON_MSA_CLIENT_ID` of its own, sign-in buttons are optional
+> and only for online play, and the Mojang download (the game files) still goes only to an account
+> the Minecraft services say owns Minecraft: Java Edition. The rest of this page documents the
+> upstream project's design and history, which no longer binds this fork — except where it
+> describes Mojang's own requirements.
+
 Horizon signs players in with their Microsoft account in the launcher and joins online-mode
 (authenticated) servers like vanilla 26.3 does. The launcher plays only with an account that owns
 Minecraft: Java Edition ([the owner gate](#the-owner-gate)), as that account, on LAN and

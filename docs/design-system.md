@@ -296,9 +296,11 @@ Light); `tokens.css` carries them as `--night-*`. The game's menus don't use it.
   semibold at 15 pixels, `#2F2F2F` with white text at night, white with `#5E5E5E` text and a
   `#8C8C8C` border at dawn, square corners. Not one of the launcher's cut plates: Microsoft's
   guidelines ask for the button as it is.
-- **The sign-in sheet** (`launcher/src/owner_page.rs`, the owner gate): an opaque plate over the
-  dimmed launcher, never instead of it. It says why (the account that owns Java Edition, no install
-  needed), the code in mono on a raised box with Copy, and Open link as the main action; the window
+- **The sign-in sheet** (`launcher/src/owner_page.rs`, the sign-in sheet; in this fork, opened only
+  by an explicit sign-in button): an opaque plate over the
+  dimmed launcher, never instead of it. It says why (online servers need a Microsoft account that
+  owns Java Edition; the game comes from your own install or from Mojang for one that owns it),
+  the code in mono on a raised box with Copy, and Open link as the main action; the window
   goes on by itself once Microsoft answers (`HORIZON_LAUNCHER_PAGE=sign-in` shows it with a made-up
   code for screenshots).
 - **New instance** (`launcher/src/new_instance.rs`): an opaque plate over the dimmed launcher,
