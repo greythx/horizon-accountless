@@ -50,7 +50,7 @@ impl Launcher {
             return None;
         }
         let t = self.theme;
-        let exe = &backend::update_target();
+        let exe = backend::exe_path();
         let clients = agents::clients(exe);
         let pick = self.agents.client.min(clients.len() - 1);
         let client = &clients[pick];
@@ -175,7 +175,7 @@ impl Launcher {
                         }
                         this.agents.busy = true;
                         this.agents.status = None;
-                        let exe = backend::update_target();
+                        let exe = horizon_launcher::backend::exe_path().to_path_buf();
                         let task = cx.background_executor().spawn(async move {
                             match agents::self_test(&exe) {
                                 Ok(n) => (true, trf("The MCP server answered with {count} tools. Now ask your agent: \"Say hello from Horizon\".", &[("count", &n.to_string())])),
@@ -202,17 +202,7 @@ impl Launcher {
                     .child(message.clone()),
             );
         }
-        Some(
-            section.child(
-                div()
-                    .id("agent-docs")
-                    .text_color(t.accent)
-                    .cursor_pointer()
-                    .hover(|s| s.opacity(0.8))
-                    .child(tr("What an agent can do, and the commands"))
-                    .on_click(|_, _, cx| cx.open_url(backend::AGENT_DOCS_URL)),
-            ),
-        )
+        Some(section)
     }
 }
 

@@ -37,9 +37,8 @@ An agent adds one server, `horizon-launcher mcp`. It holds:
   as a child process and returns what it printed. A new CLI command is a new tool with no extra
   code.
 - **Session tools**, which keep something running between calls:
-  - `play` (the game, under control: `world`, `creative`, `join`, `offscreen`, `arg`);
-  - `server`, `server_command`, `server_log`, `server_stop`;
-  - `account_sign_in`, `account_list`.
+  - `play` (the game, under control: `world`, `creative`, `server`, `offscreen`, `arg`);
+  - `server`, `server_command`, `server_log`, `server_stop`.
 - **The game's tools.** It runs the selected version's `horizon-ctl mcp` (shipped beside the
   game) as a child. It lists that server's tools as `game_<name>`, all but `launch`, and passes
   calls and results through, images included. `play` starts the game with a control endpoint in
@@ -99,18 +98,14 @@ passes on without checking it).
 | Install, remove a version | Play | yes | yes | `remove` needs `confirm` in MCP |
 | Pick the version that plays | Play | yes | yes | `settings selected-version TAG` |
 | Prepare resources | Play | yes | yes |  |
-| Start the game | Play | yes | yes | `play --world --creative --join --arg --account`; MCP `play` adds `offscreen` |
-| Join a friend by invite code | Play | yes | yes | `play --join CODE` |
+| Start the game | Play | yes | yes | `play --world --creative --server --arg`; MCP `play` adds `offscreen` |
 | Dedicated server here: start, console, log, stop | Servers | yes | yes | `server`; MCP `server`, `server_command`, `server_log`, `server_stop` |
 | Hosted servers: list, create, set up, run a command, forget | Servers | yes | yes | `servers ...`; `servers_forget` needs `confirm` |
-| Accounts: list, sign in, sign out, select, offline | Settings | yes | yes | names and UUIDs only; sign-in is a device code |
-| Game folder, server folder, install new versions, opening animation | Settings | yes | yes | `settings [KEY VALUE]` |
+| Game folder, server folder, opening animation | Settings | yes | yes | `settings [KEY VALUE]` |
 | Extra game arguments | Settings | yes | yes | `game-args` |
 | Applications menu entry (Linux) | Settings | yes | yes | `desktop-entry` |
-| Updates: check and install | Settings | yes | yes | `update` |
-| Patch notes, links | Patch notes, footer | yes | yes |  |
+| Patch notes | Versions | yes | yes | `notes [<tag>]` |
 | Game log, crash reports | Settings | yes | yes | `logs [--crash]` |
-| Data collection: status, allow, deny, show, delete, send, bug, benchmark upload | Settings > Data | yes | yes | `data_delete` needs `confirm` |
 | Mod browser: search, check, install, update, remove, list (mods, resource packs, modpacks) | Mods | yes | yes | `mods ...`; `mods_remove` needs `confirm` |
 | Modpacks: import, port, play, remove, list | Modpacks | yes | yes | `modpack ...`; `modpack_remove` needs `confirm` |
 | Launcher benchmark | (none) | yes | yes |  |
@@ -181,8 +176,8 @@ The switch is in three places: Settings > AI in the launcher, Horizon Settings i
 | Companion (#1068) | uses the same switch (see horizon-parity companion-notes.md) |
 
 Every other launcher command stays usable: versions, install, remove, prepare, play, server,
-notes, links, account, settings, game-args, logs, update, desktop-entry, data,
-modpack, mods, servers, no-ai and benchmark. None of them drives the game for an agent. The
+notes, settings, game-args, logs,
+desktop-entry, modpack, mods, servers, no-ai and benchmark. None of them drives the game for an agent. The
 launcher itself, packagers, the docs and players' scripts need them, and `no-ai` has to stay to
 turn the switch off.
 
@@ -266,20 +261,17 @@ turn the switch off.
 - **Confirm what can't be undone.** A command that deletes the player's things requires
   `confirm` and carries the MCP `destructiveHint`. In the game these are `world-delete`, `fill`
   and `setblock` (the table's `DESTRUCTIVE`); in the launcher, `remove`, `modpack remove`,
-  `mods remove`, `servers forget`, `account sign-out` and `data delete` (`cli_tools::DESTRUCTIVE`).
+  `mods remove`, `servers forget`, `worlds delete`, `screenshots delete`, `packs remove`,
+`multiplayer remove`, `worlds datapack-remove` and `unshare-log` (`cli_tools::DESTRUCTIVE`).
   Without `confirm: true` the call is refused and the message says to ask the player. In the game
   CLI the flag is `--confirm`. The launcher CLI asks nothing: a person typing `remove` meant it.
 - **Ask before reaching out.** A command that sends data or reaches other people carries
   `openWorldHint`, and its description says "only when the player asks". In the game these are
-  `connect`, `lan`, `friends`, `chat` and `command`; in the launcher, `data allow`, `data send`,
-  `data bug`, `data benchmark` and `servers create`. `play`'s `join` argument says the same.
-  Telemetry stays opt-in, and only `data allow` turns it on.
-- **No secrets.** No surface returns tokens, session files, keychain entries or invite secrets
-  the player didn't ask to share:
-  - accounts are names and UUIDs;
-  - sign-in is a device code the player enters;
-  - `--session-file` is read once and deleted;
-  - `servers` reads names and addresses only.
+  `connect`, `lan`, `friends`, `chat` and `command`; in the launcher, `servers create` and
+  `share-log`. `play`'s `server` argument says the same.
+- **No secrets.** No surface returns tokens or invite secrets the player didn't ask to share:
+  - `servers` reads names and addresses only;
+  - the Tailscale access token is never printed, only sent to Tailscale.
 - **Vanilla behaviour untouched.** Control code reads state and synthesizes the input events a
   player produces; registering widgets for the tree draws nothing. A change to game files runs
   `tools/parity.py --changed origin/main`.
@@ -376,7 +368,7 @@ A recording is one folder, a bundle is that folder plus the logs in one zip:
   stops it and writes the bundle (the chat shows the path); **F3+E** writes the bundle of the
   newest recording. The keys are off until **Recording shortcuts** is turned on (AI Agent page);
   the page also has the two buttons and a live recording/replay line.
-- `/profiler start` and `/profiler stop` in chat start and save a capture and print its file name; add `client` or `server` for one side. `/profiler status` shows whether one is running. In the official build the saved line has `[Open]` and `[Share]` (`/profiler open [id]`, `/profiler share [id]`): Open shows the capture in the viewer from your own computer, Share uploads it and prints the link, the only upload. The local `.hzperf` and private `.hzperf.share.json` owner receipt stay in reports/. Nothing uploads unless you share, and none of this depends on the telemetry switches.
+- `/profiler start` and `/profiler stop` in chat start and save a capture and print its file name; add `client` or `server` for one side. `/profiler status` shows whether one is running. In the official build the saved line has `[Open]` and `[Share]` (`/profiler open [id]`, `/profiler share [id]`): Open shows the capture in the viewer from your own computer, Share uploads it and prints the link, the only upload. The local `.hzperf` and private `.hzperf.share.json` owner receipt stay in reports/. Nothing uploads unless you share, and none of this depends on telemetry.
   See [graphics.md](graphics.md) for what the capture holds.
 - `record-replay NAME [--stop] [--in-place] [--keep-world] [--timeout S]` is the best effort
   replay: it copies the recording's world into `saves/`, opens it, restores the recorded player

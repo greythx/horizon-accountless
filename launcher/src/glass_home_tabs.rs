@@ -1,21 +1,20 @@
 //! Home's tabbed panel in the glass look (the mockup's `TabbedPanel` and `Overview`,
 //! `launcher-views.tsx`): one glass plate whose top-left corner is the tab strip, and under it
-//! the open tab. Overview shows the instance's last screenshots beside the newest patch log,
+//! the open tab. Overview shows the instance's last screenshots,
 //! then what Play still needs (the launcher's rows). Dark appearance only.
 use super::*;
 use crate::glass_ui::{self as ui, white};
-use crate::scrollbar::TakeWheel;
 use home_tabs::HomeTab;
 use horizon_theme::glass::{ink, radius};
 
-/// The tabbed panel's own body is at least this tall (`min-h-[340px]`), and so is the patch log.
+/// The tabbed panel's own body is at least this tall (`min-h-[340px]`).
 const BODY: f32 = 340.;
 /// The game log's lines in Overview: what its 200 px show (16 px around, 21 px a line).
 const OVERVIEW_LOG: usize = 8;
 
 impl Launcher {
     /// The tabbed panel: the strip, then the open tab. `rows`: what Overview shows under its
-    /// screenshots and patch log (what Play needs, the open export or launch panel).
+    /// screenshots (what Play needs, the open export or launch panel).
     pub(super) fn glass_home_tabs(&mut self, rows: Div, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let tabs = self.home_tab_list(cx);
@@ -132,29 +131,16 @@ impl Launcher {
             )
     }
 
-    /// Overview: the last screenshots and the patch log side by side, then `rows`.
+    /// Overview: the last screenshots, then `rows`.
     fn glass_overview(&mut self, rows: Div, cx: &mut Context<Self>) -> Div {
-        let wide = self.window_width >= crate::glass_home::SIDE_BY_SIDE;
+        let _ = cx;
         let shots = self.overview_shots(cx);
-        let patch = div()
-            .relative()
-            .when(wide, |d| d.flex_none().w(px(380.)))
-            .when(!wide, |d| d.w_full())
-            .min_h(px(BODY))
-            .child(self.patch_log(cx));
         div()
             .flex()
             .flex_col()
             .gap(px(20.))
             .children(self.overview_log())
-            .child(
-                div()
-                    .flex()
-                    .when(wide, |d| d.flex_row().gap(px(20.)))
-                    .when(!wide, |d| d.flex_col().gap(px(20.)))
-                    .child(shots)
-                    .child(patch),
-            )
+            .child(shots)
             .child(rows)
     }
 
@@ -315,263 +301,9 @@ impl Launcher {
             .child(head)
             .child(body)
     }
-
-    /// The patch log (`PatchLog`): a Horizon instance's Nightly changes by section (the newest
-    /// Nightly's when it plays another version), else the newest launcher release's; "All
-    /// notes" opening Patch notes. It fills its column and scrolls inside.
-    fn patch_log(&self, cx: &mut Context<Self>) -> Stateful<Div> {
-        let horizon = self.selected_instance().is_some_and(|i| i.java.is_none());
-        let played = horizon.then(|| self.selected().cloned()).flatten();
-        let (note, sections) = match &self.releases {
-            Load::Ready(list) => patch_source(list, played.as_deref()),
-            _ => None,
-        }
-        .unwrap_or_else(|| (tr("No notes yet").to_string(), Vec::new()));
-        let many = sections.len() > 1;
-        let list =
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(16.))
-                .mt(px(16.))
-                .children(sections.into_iter().map(|(section, items)| {
-                    div()
-                        .flex()
-                        .flex_col()
-                        .children(
-                            many.then(|| {
-                                ui::text(13., FontWeight::MEDIUM, ink::QUIET).child(section)
-                            }),
-                        )
-                        .child(div().mt(px(6.)).flex().flex_col().gap(px(6.)).children(
-                            items.into_iter().map(|item| {
-                                div()
-                                    .flex()
-                                    .gap(px(10.))
-                                    .child(
-                                        div()
-                                            .flex_none()
-                                            .mt(px(9.))
-                                            .size(px(5.))
-                                            .rounded_full()
-                                            .bg(white(0.4)),
-                                    )
-                                    .child(
-                                        ui::text(14., FontWeight::NORMAL, ink::STRONG)
-                                            .line_height(px(21.))
-                                            .min_w_0()
-                                            .child(item),
-                                    )
-                            }),
-                        ))
-                }));
-        div()
-            .id("patch-log")
-            .absolute()
-            .top_0()
-            .left_0()
-            .size_full()
-            .flex()
-            .flex_col()
-            .p(px(16.))
-            .rounded(px(radius::LARGE))
-            .bg(white(0.04))
-            .overflow_y_scroll()
-            .track_scroll(&self.patch_scroll.handle)
-            // The list takes the wheel while it can still move that way; at an end, or when
-            // everything fits, the page behind it gets it.
-            .take_wheel(&self.patch_scroll)
-            .child(
-                div()
-                    .flex()
-                    .items_baseline()
-                    .justify_between()
-                    .gap(px(12.))
-                    .child(card_title(tr("Patch log")))
-                    .child(
-                        ui::text(13., FontWeight::NORMAL, ink::NOTE)
-                            .id("patch-log-all")
-                            .cursor_pointer()
-                            .hover(|s| s.text_color(white(ink::FULL)))
-                            .child(tr("All notes"))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.go(Page::Versions);
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                ui::text(13., FontWeight::NORMAL, ink::NOTE)
-                    .mt(px(2.))
-                    .child(note),
-            )
-            .child(list)
-    }
-}
-
-/// A release's changes: each section's name and its lines.
-type Sections = Vec<(String, Vec<String>)>;
-
-/// What the patch log shows from `releases` and its line under the title: the release `played`
-/// installs as when it lists changes, else the newest Nightly that does ("Nightly 2026-11-01 ·
-/// 4aa6854 · Nov 1"); for a Java instance (`played` None) or without one, the newest launcher
-/// release ("Launcher 0.2.37 · Nov 2").
-fn patch_source(releases: &[Release], played: Option<&str>) -> Option<(String, Sections)> {
-    let day = |r: &Release| glass_versions::published(&r.date, "");
-    if let Some(played) = played {
-        let nightly = releases
-            .iter()
-            .filter(|r| r.tag == played)
-            .chain(releases.iter().filter(|r| r.nightly.is_some()))
-            .map(|r| (r, patch_sections(&r.body)))
-            .find(|(_, sections)| !sections.is_empty());
-        if let Some((r, sections)) = nightly {
-            return Some((format!("{} · {}", r.name, day(r)), sections));
-        }
-    }
-    let r = releases
-        .iter()
-        .find(|r| r.nightly.is_none() && !r.prerelease)?;
-    let version = r
-        .tag
-        .rsplit('@')
-        .next()
-        .unwrap_or(&r.tag)
-        .trim_start_matches('v');
-    let note = format!(
-        "{} · {}",
-        trf("Launcher {version}", &[("version", version)]),
-        day(r)
-    );
-    Some((note, patch_sections(&r.body)))
 }
 
 /// A card's title (`CARD_TITLE`): 16 px semibold.
 fn card_title(label: impl Into<SharedString>) -> Div {
     ui::text(16., FontWeight::SEMIBOLD, ink::FULL).child(label.into())
-}
-
-/// A release's changes by section ("### New", "### Fixed"), each line without its pull request
-/// numbers; the contributors' thanks and what follows the notes are left out.
-fn patch_sections(body: &str) -> Sections {
-    let mut out: Sections = Vec::new();
-    for line in body.lines() {
-        let line = line.trim();
-        if let Some(name) = line.strip_prefix("### ") {
-            out.push((name.trim().to_string(), Vec::new()));
-        } else if line == "---" || line.starts_with("Your launcher updates itself") {
-            break;
-        } else if let (Some(item), Some((section, items))) =
-            (line.strip_prefix("- "), out.last_mut())
-        {
-            if section.as_str() != "Contributors" {
-                items.push(strip_refs(item));
-            }
-        }
-    }
-    out.retain(|(name, items)| name != "Contributors" && !items.is_empty());
-    out
-}
-
-/// "Fix the picker (#6389, fixes #6342)" → "Fix the picker".
-fn strip_refs(item: &str) -> String {
-    let mut s = item.trim();
-    while let Some(open) = s.rfind(" (") {
-        let tail = &s[open..];
-        if tail.ends_with(')') && tail.contains('#') {
-            s = s[..open].trim_end();
-        } else {
-            break;
-        }
-    }
-    s.to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_release_body_becomes_its_sections_without_refs_or_thanks() {
-        let body = "### New\n- Native mods: export a headless engine (#6462)\n\n### Fixed\n- Play with friends: any port (#6363, fixes #6342)\n- Keep (this) aside\n\n### Contributors\nThanks to @a.\n\nYour launcher updates itself. New here?\n\n---\nNot an official Minecraft product.";
-        assert_eq!(
-            patch_sections(body),
-            vec![
-                (
-                    "New".to_string(),
-                    vec!["Native mods: export a headless engine".to_string()]
-                ),
-                (
-                    "Fixed".to_string(),
-                    vec![
-                        "Play with friends: any port".to_string(),
-                        "Keep (this) aside".to_string()
-                    ]
-                ),
-            ]
-        );
-    }
-
-    fn release(tag: &str, name: &str, date: &str, nightly: bool, body: &str) -> Release {
-        Release {
-            tag: tag.into(),
-            name: name.into(),
-            body: body.into(),
-            date: date.into(),
-            time: String::new(),
-            asset: None,
-            prerelease: false,
-            nightly: nightly.then(|| "nightly".to_string()),
-        }
-    }
-
-    #[test]
-    fn the_patch_log_shows_the_played_nightly_else_the_newest_else_the_launcher() {
-        let releases = [
-            release(
-                "nightly-2026-11-03-2944480",
-                "Nightly 2026-11-03 · 2944480",
-                "2026-11-03",
-                true,
-                "### Fixed\n- Newest fix (#2)",
-            ),
-            release(
-                "nightly-2026-11-01-4aa6854",
-                "Nightly 2026-11-01 · 4aa6854",
-                "2026-11-01",
-                true,
-                "### New\n- Older change (#1)",
-            ),
-            release(
-                "nightly-2026-10-30-0c02067",
-                "Nightly 2026-10-30 · 0c02067",
-                "2026-10-30",
-                true,
-                "No list.",
-            ),
-            release(
-                "launcher@0.2.37",
-                "Horizon launcher 0.2.37",
-                "2026-11-02",
-                false,
-                "### Fixed\n- Launcher fix",
-            ),
-        ];
-        let (note, sections) = patch_source(&releases, Some("nightly-2026-11-01-4aa6854")).unwrap();
-        assert_eq!(note, "Nightly 2026-11-01 · 4aa6854 · Nov 1");
-        assert_eq!(
-            sections,
-            vec![("New".to_string(), vec!["Older change".to_string()])]
-        );
-        // A version that lists no changes: the newest Nightly's.
-        let (note, _) = patch_source(&releases, Some("nightly-2026-10-30-0c02067")).unwrap();
-        assert_eq!(note, "Nightly 2026-11-03 · 2944480 · Nov 3");
-        // A Java instance: the launcher's.
-        let (note, sections) = patch_source(&releases, None).unwrap();
-        assert_eq!(note, "Launcher 0.2.37 · Nov 2");
-        assert_eq!(
-            sections,
-            vec![("Fixed".to_string(), vec!["Launcher fix".to_string()])]
-        );
-    }
 }

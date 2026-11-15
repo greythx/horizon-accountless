@@ -7,10 +7,17 @@ plan are in [server.md](server.md).
 
 ## Before you start
 
+*Fork note (2026-11-16): this fork has no Minecraft sign-in anywhere, and the launcher's hosted
+servers are always created with `--offline` — there is no account check to switch on. The online-mode
+text below describes `horizon-server` the program; no client in this fork can sign in to an online-mode
+server. The settings row for Minecraft account checks is gone in this fork: servers are always
+created with `online_mode` off, and it is not exposed in the UI.*
+
 - **Online mode checks accounts** (release v2026.10.17.07 and newer). With `online_mode = true`, the
   default, every player joins with their own account, as on a vanilla server: vanilla players signed in with
-  the official Minecraft launcher, Horizon players with the Microsoft account they signed in with in Horizon's
-  launcher ([microsoft-account.md](microsoft-account.md)).
+  the official Minecraft launcher, Horizon players with a Microsoft account their launcher can sign in with
+  ([microsoft-account.md](microsoft-account.md); this fork's launcher has no sign-in, so its players always
+  join as offline players, exactly as they would with no session in any launcher).
 - **Names you add are accounts** (release v2026.10.17.14 and newer). `init --player`, `horizon-server
   whitelist add` and `op`, and the console's `whitelist add`, `op` and `ban` look a name up the way vanilla
   does: players already seen (kept in `usercache.json`), then Mojang's profile service. In online mode a name

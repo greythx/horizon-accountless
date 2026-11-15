@@ -62,12 +62,10 @@ pub(super) enum Field {
     DeleteServer,
     /// Settings' accent as hex (`themes_page.rs`).
     AccentHex,
-    /// The Shop's gift recipient (`wardrobe_page/shop/basket.rs`).
-    ShopGift,
 }
 
 impl Field {
-    const ALL: [Field; 24] = [
+    const ALL: [Field; 23] = [
         Field::Name,
         Field::Seed,
         Field::Players,
@@ -91,7 +89,6 @@ impl Field {
         Field::MemoryLimit,
         Field::DeleteServer,
         Field::AccentHex,
-        Field::ShopGift,
     ];
 }
 
@@ -162,7 +159,6 @@ pub(super) struct Create {
     difficulty: &'static str,
     max_players: u32,
     friends_only: bool,
-    check_accounts: bool,
     eula: bool,
     /// Create was pressed without the EULA ticked.
     eula_missing: bool,
@@ -390,18 +386,6 @@ pub(super) fn stop_on_quit() {
             let _ = api.call("POST", "/api/v1/stop", None);
         }
     }
-}
-
-/// Update closes the window to open the new launcher at once: a server is its own process and the
-/// new window finds it running, so an update doesn't end anyone's game. It stays up when that new
-/// window closes too, until it is stopped on the Servers page.
-pub(super) fn keep_running_through_update() {
-    STARTED_HERE.lock().unwrap().clear();
-}
-
-/// The player's own name, to let them in on a friends-only server: the Microsoft account that plays.
-fn own_name(accounts: &Accounts) -> Option<String> {
-    accounts.selected().map(|a| a.name.clone())
 }
 
 fn bytes(n: u64) -> String {
@@ -914,7 +898,7 @@ impl Launcher {
                     self.servers.create = None;
                     self.go(Page::Play);
                     if !self.preparing {
-                        self.prepare(backend::MinecraftFrom::Install);
+                        self.prepare();
                     }
                 }
             },
@@ -949,22 +933,15 @@ impl Launcher {
             format!("Server {}", self.servers.list.len() + 1)
         };
         // The glass dialog starts with an empty name (its placeholder says the default) and the
-        // player as the first friend.
+        // friends list empty; the player adds their own name there if they want it let in.
         let glass = self.theme.glass;
-        let own = own_name(&self.accounts).unwrap_or_default();
         self.servers
             .text(Field::Name)
             .set(if glass { String::new() } else { name });
         self.servers.selected = (!glass).then_some(Field::Name);
         self.servers.text(Field::Seed).set(String::new());
-        self.servers
-            .text(Field::Players)
-            .set(if glass { String::new() } else { own.clone() });
-        let friends = if glass && !own.is_empty() {
-            vec![own]
-        } else {
-            Vec::new()
-        };
+        self.servers.text(Field::Players).set(String::new());
+        let friends = Vec::new();
         let details = if glass {
             horizon_launcher::worlds::list(&backend::game_home())
                 .into_iter()
@@ -986,7 +963,6 @@ impl Launcher {
             difficulty: "normal",
             max_players: 10,
             friends_only: true,
-            check_accounts: true,
             eula: false,
             eula_missing: false,
             friends,
@@ -1034,7 +1010,6 @@ impl Launcher {
             difficulty: c.difficulty.into(),
             max_players: c.max_players,
             friends_only: c.friends_only,
-            check_accounts: c.check_accounts,
             players,
             eula: c.eula,
         };
@@ -1284,7 +1259,6 @@ impl Launcher {
                 self.save_launch()
             }
             Field::MemoryLimit => self.memory_enter(),
-            Field::ShopGift => self.shop.find_soon = true,
             Field::ServerName | Field::ServerAddress => self.add_server(),
         }
     }
@@ -1440,34 +1414,11 @@ impl Launcher {
         {
             page = page.child(self.problem_notice(p, cx));
         }
-        // The banner, with a "Hide" once it has been on screen a while: hiding it hides the
-        // sidebar's card too, for good. Nothing at all once hidden.
-        let partner = (!self.settings.partner_hidden).then(|| {
-            let mut slot = div().relative().w(px(600.)).child(super::partner::banner(
-                "partner-servers",
-                600.,
+        if self.servers.list.is_empty() {
+            return page.child(centered(
+                tr("No server yet. Create one: it takes a few seconds, and with the defaults (tick the EULA, press Create) you get a friends-only survival world."),
                 &t,
             ));
-            if self.settings.partner_seen_secs >= super::partner::SEEN_BEFORE_HIDE {
-                slot = slot.child(
-                    super::partner::hide_button("partner-servers-hide", &t).on_click(cx.listener(
-                        |this, _: &ClickEvent, _, cx| {
-                            this.settings.partner_hidden = true;
-                            this.save_settings();
-                            cx.notify();
-                        },
-                    )),
-                );
-            }
-            slot
-        });
-        if self.servers.list.is_empty() {
-            return page
-                .child(centered(
-                    tr("No server yet. Create one: it takes a few seconds, and with the defaults (tick the EULA, press Create) you get a friends-only survival world."),
-                    &t,
-                ))
-                .children(partner);
         }
         let mut list = div().flex().flex_col().border_t_1().border_color(t.rule);
         for (i, e) in self.servers.list.clone().into_iter().enumerate() {
@@ -1513,7 +1464,7 @@ impl Launcher {
                 &t,
             ));
         }
-        page.child(list).children(partner)
+        page.child(list)
     }
 
     fn add_server_folder(&mut self, cx: &mut Context<Self>) {
@@ -2522,17 +2473,6 @@ impl Launcher {
                 .into_any_element(),
             _ => disabled(switch("pvp", true, &t)).into_any_element(),
         };
-        let accounts = self
-            .servers
-            .setting("server", "online_mode")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let accounts_switch = switch("online-mode", accounts, &t)
-            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                this.set_setting("server.online_mode", (!accounts).to_string());
-                cx.notify();
-            }))
-            .into_any_element();
         let live = if running {
             tr("Applies at once.")
         } else {
@@ -2610,19 +2550,10 @@ impl Launcher {
                 ),
             )
             .child(self.setting_row(
-                "Check Minecraft accounts",
-                if accounts {
-                    format!(
-                        "{} {later}",
-                        tr("On: players must own Minecraft and sign in with Microsoft.")
-                    )
-                } else {
-                    format!(
-                        "{} {later}",
-                        tr("Off: anyone can play under any name, so keep Friends only on.")
-                    )
-                },
-                accounts_switch,
+                // Non-interactive: this fork has no accounts at all, so online mode is not offered.
+                "Check Minecraft accounts (not offered: this build has no accounts)",
+                tr("Off: anyone can play under any name, so keep Friends only on.").to_string(),
+                div().into_any_element(),
             ))
             .child(self.background_row(cx))
             .child(self.delete_server_section(status, cx));

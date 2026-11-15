@@ -106,9 +106,9 @@ A launcher whose files are laid out its own way names them one by one instead of
 with `indexes/` and `objects/`); each replaces only what it names, and every file is still
 checked against `research-lock.json`'s pins. When an earlier import beside `--root` is still
 verified, it is reused and the named files aren't read. Two things no such launcher keeps:
-- **The server jar.** The first `--prepare` needs `--server-jar`. Horizon never downloads it; a
-  launcher downloads it (the version JSON's `downloads.server`) only for a signed-in account that
-  owns Minecraft: Java Edition, as `horizon-launcher` does.
+- **The server jar.** The first `--prepare` needs `--server-jar`. Horizon never downloads it;
+  this fork's launcher downloads it (the version JSON's `downloads.server`) for a preparation,
+  unconditionally.
 - **Java 25.** `--java-home PATH` names a runtime the launcher manages. The preparer takes the first
   Java of the pinned version from `JAVA_HOME`, the `PATH`, `--java-home`, then the official
   launcher's runtimes.

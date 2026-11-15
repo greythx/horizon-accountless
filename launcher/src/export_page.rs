@@ -210,8 +210,8 @@ impl Launcher {
                 .child(caps(tr("Worlds")).text_color(t.muted))
                 .child(worlds)
                 .child(text(theme::CAPTION).text_color(t.muted).child(tr(
-                    "Settings, packs and Horizon mods go in; logs, screenshots, backups and \
-                         your account never do. Worlds go without their per-player files.",
+                    "Settings, packs and Horizon mods go in; logs, screenshots and backups \
+                         never do. Worlds go without their per-player files.",
                 )))
                 .child(
                     div()

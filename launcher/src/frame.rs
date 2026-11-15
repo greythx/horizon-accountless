@@ -1,6 +1,6 @@
 //! The glass look's frame (the mockup's `launcher-app.tsx`): the sidebar plate with the
-//! instances, the launcher's update, Sculk's card, Discord and the links; the top bar with the
-//! pages in a glass tab strip, the player, Microsoft sign-in and Settings; and the menus they open.
+//! instances; the top bar with the
+//! pages in a glass tab strip and Settings; and the menus they open.
 //! Dark appearance only for now (`docs/design-system.md`, "Glass").
 use super::*;
 use crate::glass_ui::{self as ui, white, Tone};
@@ -119,11 +119,6 @@ impl Launcher {
                         trf("{version} is not installed", &[("version", own)]),
                     ),
                     (None, None, None) => (Tone::Off, tr("No version installed").into()),
-                    // Following the launcher's version, which has a newer one waiting.
-                    (None, Some(_), None) if self.updates.horizon.is_some() => (
-                        Tone::Accent(self.look.accent_soft),
-                        tr("Update available").into(),
-                    ),
                     (None, Some(_), _) if !prepared => (Tone::Warn, tr("Needs preparing").into()),
                     (None, Some(tag), _) if self.native_build_of(tag).is_some() => {
                         let build = self.native_build_of(tag).unwrap_or_default();
@@ -273,9 +268,8 @@ impl Launcher {
     }
 
     /// The glass sidebar: a plate 248 wide, 14 from the window's edges.
-    pub(super) fn glass_sidebar(&mut self, window: &Window, cx: &mut Context<Self>) -> Div {
+    pub(super) fn glass_sidebar(&mut self, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
-        let soft = self.look.accent_soft;
         self.load_packs();
         let add = ui::icon_button(
             "add-instance",
@@ -369,221 +363,7 @@ impl Launcher {
             .px(px(10.))
             .pt(px(16.))
             .pb(px(12.));
-        // The launcher's own update (the mockup's card), while one downloads or waits.
-        let card = |title: String, right: Option<String>| {
-            div()
-                .flex()
-                .flex_col()
-                .rounded(px(radius::ROW))
-                .bg(white(fill::FIELD))
-                .p(px(14.))
-                .child(
-                    div()
-                        .flex()
-                        .items_baseline()
-                        .justify_between()
-                        // The title wraps within the card: a long translation takes a second line.
-                        .child(
-                            ui::text(14., FontWeight::SEMIBOLD, ink::FULL)
-                                .flex_1()
-                                .min_w_0()
-                                .child(title),
-                        )
-                        .children(
-                            right.map(|r| ui::text(13., FontWeight::NORMAL, ink::NOTE).child(r)),
-                        ),
-                )
-        };
-        match &self.self_update {
-            SelfUpdate::Downloading(version, f) => {
-                foot = foot.child(
-                    card(
-                        trf("Launcher {version}", &[("version", version)]),
-                        Some(format!("{:.0}%", f * 100.)),
-                    )
-                    .child(div().mt(px(10.)).child(ui::bar(*f, soft))),
-                );
-            }
-            SelfUpdate::Ready(version) => {
-                foot = foot.child(
-                    // The version on a line of its own: the title fills the card's width.
-                    card(tr("A new version is available").to_string(), None)
-                        .child(
-                            ui::text(13., FontWeight::NORMAL, ink::NOTE)
-                                .mt(px(4.))
-                                .child(trf("Launcher {version}", &[("version", version)])),
-                        )
-                        .child(
-                            ui::solid("update-launcher", tr("Update"), 32., 13., &t)
-                                .mt(px(12.))
-                                .w_full()
-                                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                    this.apply_launcher_update(cx);
-                                    cx.notify();
-                                })),
-                        ),
-                );
-            }
-            SelfUpdate::Stuck(error) if !self.self_update_hidden => {
-                let why = self.launcher_update_help(error.as_deref());
-                let url = backend::download_page(&self.links.website);
-                foot = foot.child(
-                    card(tr("A new version is available").to_string(), None)
-                        .child(
-                            ui::text(13., FontWeight::NORMAL, ink::NOTE)
-                                .mt(px(6.))
-                                .child(why),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(6.))
-                                .mt(px(12.))
-                                .when(self.launcher_download_available(), |actions| {
-                                    actions.child(
-                                        ui::solid(
-                                            "download-launcher",
-                                            tr("Download again"),
-                                            32.,
-                                            13.,
-                                            &t,
-                                        )
-                                        .w_full()
-                                        .on_click(move |_, _, cx| cx.open_url(&url)),
-                                    )
-                                })
-                                .child(
-                                    ui::solid(
-                                        "dismiss-launcher-update",
-                                        tr("Dismiss"),
-                                        32.,
-                                        13.,
-                                        &t,
-                                    )
-                                    .w_full()
-                                    .on_click(cx.listener(
-                                        |this, _: &ClickEvent, _, cx| {
-                                            this.self_update_hidden = true;
-                                            cx.notify();
-                                        },
-                                    )),
-                                ),
-                        ),
-                );
-            }
-            _ => {}
-        }
-
-        // Sculk's card (not in the mockup, kept: a sponsor), where the old sidebar had it: at
-        // the sidebar's foot above the links, on every page (Servers shows the wide banner too).
-        // Tall where the sidebar has the height for it besides its rows, compact otherwise.
-        if !self.settings.partner_hidden {
-            let rows = self.instances.list.len() + servers.len();
-            let free = f32::from(window.viewport_size().height)
-                - 2. * MARGIN
-                - 52.
-                - 56. * rows as f32
-                - 190.;
-            let mut side = div().relative().mt(px(12.)).child(partner::card(
-                "partner-side",
-                SIDEBAR - 20.,
-                free < partner::TALL_HEIGHT,
-                &t,
-            ));
-            if self.settings.partner_seen_secs >= partner::SEEN_BEFORE_HIDE {
-                side = side.child(
-                    partner::hide_button("partner-hide", &t).on_click(cx.listener(
-                        |this, _: &ClickEvent, _, cx| {
-                            this.settings.partner_hidden = true;
-                            this.save_settings();
-                            cx.notify();
-                        },
-                    )),
-                );
-            }
-            foot = foot.child(side);
-        }
-
-        if !self.links.discord.is_empty() {
-            let url = self.links.discord.clone();
-            foot = foot.child(keyboard(
-                div()
-                    .id("discord")
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .gap(px(10.))
-                    .mt(px(12.))
-                    // At least 40 high: a long translation wraps onto a second line, which grows the
-                    // button instead of spilling out of it.
-                    .min_h(px(40.))
-                    .px(px(12.))
-                    .py(px(8.))
-                    .rounded(px(radius::ROW))
-                    .bg(ui::color(horizon_theme::glass::DISCORD))
-                    .hover(|s| s.bg(ui::color(horizon_theme::glass::DISCORD_HOVER)))
-                    .cursor_pointer()
-                    .child(ui::icon("discord", 18., gpui::white()))
-                    .child(
-                        ui::text(14., FontWeight::SEMIBOLD, ink::FULL)
-                            .min_w_0()
-                            .text_center()
-                            .child(tr("Join the Discord")),
-                    )
-                    .on_click(move |_, _, cx| cx.open_url(&url)),
-                &t,
-            ));
-        }
-        let link = |id: &'static str, label: &'static str, icon: &'static str, url: String| {
-            let id = SharedString::from(id);
-            keyboard(
-                track_hover(
-                    div()
-                        .id(id.clone())
-                        .relative()
-                        .flex()
-                        .items_center()
-                        .gap(px(10.))
-                        .h(px(36.))
-                        .px(px(8.))
-                        .rounded(px(radius::ROW))
-                        .cursor_pointer()
-                        .text_color(white(ink::SOFT))
-                        .hover(|s| s.text_color(white(ink::FULL)))
-                        .child(hover_layer(&id, white(fill::HOVER), radius::ROW, 0.))
-                        .child(ui::icon(icon, 17., white(ink::SOFT)).relative())
-                        .child(
-                            div()
-                                .relative()
-                                .font_family(horizon_theme::glass::FONT)
-                                .text_size(px(14.))
-                                .child(label),
-                        )
-                        .on_click(move |_, _, cx| cx.open_url(&url)),
-                    id,
-                ),
-                &t,
-            )
-        };
-        let mut links = div().flex().flex_col().mt(px(8.));
-        if !self.links.sponsor.is_empty() {
-            links = links.child(link(
-                "sponsor",
-                tr("Sponsor"),
-                "favourite",
-                self.links.sponsor.clone(),
-            ));
-        }
-        if !self.links.website.is_empty() {
-            links = links.child(link(
-                "website",
-                tr("Website"),
-                "globe-02",
-                self.links.website.clone(),
-            ));
-        }
-        foot = foot.child(links).child(
+        foot = foot.child(
             ui::text(12., FontWeight::NORMAL, ink::DIM)
                 .id("launcher-version")
                 .px(px(8.))
@@ -604,8 +384,7 @@ impl Launcher {
             .child(foot.relative())
     }
 
-    /// The glass top bar: the pages in a glass strip, then the player, Microsoft sign-in and
-    /// Settings (`px-8 pt-3.5`).
+    /// The glass top bar: the pages in a glass strip, then Settings (`px-8 pt-3.5`).
     pub(super) fn glass_topbar(&mut self, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let wide = self.window_width >= crate::glass_home::TOP_BAR_WIDE;
@@ -615,7 +394,7 @@ impl Launcher {
             .items_center()
             .gap(px(if compact { 2. } else { 4. }))
             .min_w_0();
-        for (page, label, _) in Page::in_top_bar(self.wardrobe_shown()) {
+        for (page, label, _) in Page::in_top_bar() {
             let mut item = ui::tab(format!("nav-{label}"), tr(label), self.page == page, &t);
             if compact {
                 item = item.px(px(8.));
@@ -637,97 +416,6 @@ impl Launcher {
                     .on_scroll(|_, _, cx| cx.stop_propagation())
             }));
 
-        let (name, how) = self.who_plays();
-        let face = self.accounts.selected().map(|a| a.uuid.clone());
-        let open = self.account_menu;
-        let chip =
-            div()
-                .id("account")
-                .relative()
-                .flex()
-                .items_center()
-                .gap(px(10.))
-                .h(px(44.))
-                .pl(px(8.))
-                .pr(px(12.))
-                .rounded(px(radius::ROW))
-                .bg(white(if open { fill::ACTIVE } else { fill::ROW_HOVER }))
-                .when(!open, |d| d.hover(|s| s.bg(white(0.09))))
-                .cursor_pointer()
-                .child(
-                    div().size(px(26.)).rounded(px(7.)).overflow_hidden().child(
-                        self.profile_heads
-                            .draw(face.as_deref(), 26., self.scale, &t),
-                    ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .max_w(px(if compact { 100. } else { 150. }))
-                        .child(
-                            ui::text(14., FontWeight::SEMIBOLD, ink::FULL)
-                                .line_height(px(17.))
-                                .truncate()
-                                .child(name),
-                        )
-                        .children((!compact).then(|| {
-                            ui::text(12., FontWeight::NORMAL, ink::QUIET)
-                                .line_height(px(15.))
-                                .child(how)
-                        })),
-                )
-                .child(
-                    ui::icon("arrow-down-01", 16., white(ink::FAINT))
-                        .ml(px(4.))
-                        .with_transformation(gpui::Transformation::rotate(gpui::radians(
-                            if open { std::f32::consts::PI } else { 0. },
-                        ))),
-                )
-                .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
-                    if this.closed_by_this_press(event) {
-                        return;
-                    }
-                    this.account_menu = !this.account_menu;
-                    if this.account_menu {
-                        this.accounts = Accounts::load();
-                        this.load_profile_heads();
-                    }
-                    cx.notify();
-                }));
-        let account = div()
-            .relative()
-            .child(keyboard(chip, &t))
-            .children(self.glass_account_menu(cx));
-
-        // Signing in with Microsoft, while nobody is: the mockup's button. Optional, for online
-        // play; the game starts without it.
-        let sign_in = self.accounts.selected().is_none().then(|| {
-            keyboard(
-                div()
-                    .id("topbar-sign-in")
-                    .relative()
-                    .flex()
-                    .items_center()
-                    .gap(px(10.))
-                    .h(px(44.))
-                    .px(px(16.))
-                    .rounded(px(radius::ROW))
-                    .bg(white(fill::BUTTON))
-                    .hover(|s| s.bg(white(fill::BUTTON_HOVER)))
-                    .cursor_pointer()
-                    .child(microsoft::logo(16.))
-                    .child(
-                        ui::text(14., FontWeight::MEDIUM, ink::FULL)
-                            .child(tr("Sign in with Microsoft")),
-                    )
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.sign_in_to_play();
-                        cx.notify();
-                    })),
-                &t,
-            )
-        });
         let settings = ui::icon_button(
             "nav-Settings",
             "sliders-horizontal",
@@ -783,95 +471,8 @@ impl Launcher {
                     .items_center()
                     .gap(px(6.))
                     .children(build_log)
-                    .child(account)
-                    .children(sign_in)
                     .child(settings),
             )
-    }
-
-    /// The menu under the player (`Switch player`): everyone who can play, then Manage accounts.
-    fn glass_account_menu(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
-        if !self.account_menu {
-            return None;
-        }
-        let t = self.theme;
-        let soft = self.look.accent_soft;
-        let now = self.accounts.selected().map(|a| a.uuid.clone());
-        let mut menu = ui::popover(250.)
-            .id("account-menu")
-            .occlude()
-            .on_mouse_down_out(cx.listener(|this, event: &MouseDownEvent, _, cx| {
-                this.account_menu = false;
-                this.menu_closed_at = Some(event.position);
-                cx.notify();
-            }));
-        for (i, (who, name, how)) in self.players().into_iter().enumerate() {
-            let chosen = Some(&who) == now.as_ref();
-            let id = SharedString::from(format!("account-pick-{i}"));
-            menu = menu.child(keyboard(
-                track_hover(
-                    div()
-                        .id(id.clone())
-                        .relative()
-                        .flex()
-                        .items_center()
-                        .gap(px(12.))
-                        .h(px(48.))
-                        .px(px(10.))
-                        .rounded(px(radius::CONTROL))
-                        .cursor_pointer()
-                        .child(hover_layer(&id, white(0.07), radius::CONTROL, 0.))
-                        .child(
-                            div()
-                                .relative()
-                                .size(px(30.))
-                                .rounded(px(8.))
-                                .overflow_hidden()
-                                .child(self.profile_heads.draw(
-                                    Some(who.as_str()),
-                                    30.,
-                                    self.scale,
-                                    &t,
-                                )),
-                        )
-                        .child(
-                            div()
-                                .relative()
-                                .flex()
-                                .flex_col()
-                                .flex_1()
-                                .min_w_0()
-                                .child(
-                                    ui::text(14., FontWeight::MEDIUM, ink::FULL)
-                                        .truncate()
-                                        .child(name),
-                                )
-                                .child(ui::text(12., FontWeight::NORMAL, ink::FAINT).child(how)),
-                        )
-                        .when(chosen, |d| {
-                            d.child(ui::icon("tick-02", 16., ui::color(soft)).relative())
-                        })
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                            this.play_as(&who);
-                            cx.notify();
-                        })),
-                    id,
-                ),
-                &t,
-            ));
-        }
-        menu = menu.child(div().mt(px(4.)).child(
-            ui::menu_row("account-manage", "user", tr("Manage accounts"), false, &t).on_click(
-                cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.account_menu = false;
-                    this.go(Page::Settings);
-                    cx.notify();
-                }),
-            ),
-        ));
-        Some(deferred(
-            div().absolute().top(px(52.)).right_0().child(menu),
-        ))
     }
 
     /// The ⋮ menu of a sidebar row, beside it: Edit…, Duplicate…, Open folder, Export…,

@@ -1,7 +1,7 @@
 # Launcher API
 
 What a player's agent, a script or a pack maker can do with `horizon-launcher`: install and run versions, manage
-accounts, settings, mods, modpacks and hosted servers, from a terminal or over MCP. The launcher itself:
+settings, mods, modpacks and hosted servers, from a terminal or over MCP. The launcher itself:
 [launcher/README.md](../../launcher/README.md).
 
 ## Overview
@@ -12,8 +12,8 @@ the MCP server is off.
 
 | | Count |
 | --- | --- |
-| Commands | 46: versions, installs, play, the server, notes, links, accounts, settings, logs, updates, data collection, modpacks, mods, hosted servers, MCP, benchmark |
-| MCP tools | 43, plus the game's tools as `game_<tool>` ([agent-control.md](agent-control.md)) |
+| Commands | 80: versions, installs, play, the server, notes, settings, logs, modpacks, mods, hosted servers, MCP, benchmark |
+| MCP tools | 75, plus the game's tools as `game_<tool>` ([agent-control.md](agent-control.md)) |
 | Modpack formats it imports | 3: a Modrinth `.mrpack`, a CurseForge zip, an instance folder |
 
 ## Guide

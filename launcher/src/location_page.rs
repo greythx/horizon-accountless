@@ -55,9 +55,6 @@ impl Launcher {
             || self.starting_pack.is_some()
             || self.pack_busy
             || self.mods.busy.is_some()
-            || !self.auth_busy.is_empty()
-            || (self.sign_in.is_some() && !matches!(self.sign_in_state, Some(SignInState::Done(_))))
-            || matches!(self.self_update, SelfUpdate::Downloading(..))
             || self.servers.location_busy()
             || self.importing.location_busy()
             || self.github.busy()
@@ -71,7 +68,7 @@ impl Launcher {
         if environment_blocked() {
             Some(tr("Data folders are set by HORIZON_LAUNCHER_HOME or HORIZON_HOME. Remove these environment overrides and restart the launcher before moving data here.").into())
         } else if self.location_busy() {
-            Some(tr("Close the game and servers, and wait for downloads, builds, imports and sign-in to finish before moving data.").into())
+            Some(tr("Close the game and servers, and wait for downloads, builds and imports to finish before moving data.").into())
         } else {
             None
         }
@@ -175,11 +172,7 @@ impl Launcher {
                 .spawn()
         });
         match result {
-            Ok(_) => {
-                // No installer while the worker copies the data folder its stage is in.
-                horizon_launcher::update_handoff::forget();
-                cx.quit()
-            }
+            Ok(_) => cx.quit(),
             Err(error) => {
                 self.location_error = Some(trf(
                     "Could not start data move: {error}",

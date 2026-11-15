@@ -124,10 +124,6 @@ the same grid.
 the MIT license (`crates/horizon-theme/icons/glass/LICENSE-hugeicons.txt`), exported with a 1.6
 stroke in `currentColor`.
 
-`crates/horizon-theme/icons/glass/discord.svg` is Discord's logo as drawn by
-[Simple Icons](https://github.com/simple-icons/simple-icons) 13.21.0 (CC0 1.0). The logo is Discord's
-trademark, used only on the button that opens Horizon's Discord server.
-
 ## AMD FidelityFX SDK (FSR 3.1 frame generation)
 
 `crates/horizon-client-render/src/gfx/frame_gen/optical_flow.wgsl` and `interpolation.wgsl` are
@@ -157,15 +153,6 @@ instance icons.
 
 Each logo belongs to its project. Showing it says which loader an instance runs; it does not mean
 the project endorses Horizon.
-
-## Sign in with Microsoft
-
-The launcher's sign-in buttons follow Microsoft's published branding guidelines for apps that sign in
-with Microsoft accounts
-([Sign in with Microsoft branding](https://learn.microsoft.com/en-us/entra/identity-platform/howto-add-branding-in-apps)).
-The four-square Microsoft symbol in `launcher/src/microsoft.rs` reproduces the squares, positions and
-colours of Microsoft's official `ms-symbollockup_mssymbol_19.svg` from that page, unmodified. Microsoft
-and its logo are trademarks of the Microsoft group of companies; Horizon is not endorsed by Microsoft.
 
 ## CIT Resewn
 

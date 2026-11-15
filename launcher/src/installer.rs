@@ -18,13 +18,14 @@ use crate::shortcut;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_WRITE};
+use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
 use winreg::RegKey;
 
 pub const APP_NAME: &str = "Horizon Launcher";
 const BINARY: &str = "horizon-launcher.exe";
 const PUBLISHER: &str = "Horizon";
-const ABOUT_URL: &str = "https://playhorizon.dev";
+/// The fork's site, as the about address in the uninstall registry entry.
+const ABOUT_URL: &str = "https://github.com/greythx/horizon-accountless";
 const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\HorizonLauncher";
 const OWN_KEY: &str = r"Software\Horizon\Launcher";
 const ASIDE_PREFIX: &str = "horizon-launcher-uninstall-";
@@ -186,8 +187,8 @@ fn same_path(a: &Path, b: &Path) -> bool {
         .eq_ignore_ascii_case(b.to_string_lossy().trim_end_matches('\\'))
 }
 
-/// Puts `src` at `dest`, as a self-update does (`backend::replace_binary`): a running `dest` can't
-/// be written or deleted but can be renamed, so it steps aside and `remove_replaced_binaries`
+/// Puts `src` at `dest`: a running `dest` can't be
+/// written or deleted but can be renamed, so it steps aside and `remove_replaced_binaries`
 /// clears it at the next start.
 fn place(src: &Path, dest: &Path) -> io::Result<()> {
     let dir = dest
@@ -548,29 +549,6 @@ pub fn uninstall(remove_data: bool, progress: impl Fn(Step, f32)) -> Result<Vec<
     }
     progress(Step::Data, 1.0);
     Ok(left)
-}
-
-/// After a self-update: the Uninstall entry names the new version and size. Only for the install
-/// this launcher runs from; a launcher unpacked from the ZIP touches nothing.
-pub fn after_update(version: &str) {
-    let Some(registered) = registered() else {
-        return;
-    };
-    let exe = backend::exe_path();
-    if !exe
-        .parent()
-        .is_some_and(|dir| same_path(dir, &registered.dir))
-    {
-        return;
-    }
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    if let Ok(key) = hkcu.open_subkey_with_flags(UNINSTALL_KEY, KEY_WRITE) {
-        let _ = key.set_value("DisplayVersion", &version.to_string());
-        let _ = key.set_value("EstimatedSize", &size_kb(exe));
-    }
-    if let Ok(key) = hkcu.open_subkey_with_flags(OWN_KEY, KEY_WRITE) {
-        let _ = key.set_value("Version", &version.to_string());
-    }
 }
 
 /// `setup --quiet [--dir <folder>] [--desktop-shortcut]` (the setup exe only) and

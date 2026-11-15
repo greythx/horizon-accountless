@@ -177,6 +177,7 @@ fn an_instance_follows_the_players_answers() {
     let (main, own) = (root.join("main"), root.join("own"));
     put(&main.join("options.txt"), "fov:90\n");
     put(&main.join("horizon-player.txt"), "name:Player123\n");
+    // A leftover from upstream: the fork copies no telemetry state into new instances.
     put(&main.join("telemetry/consent.json"), r#"{"version":1}"#);
     horizon_platform::no_ai::set(&main, true).unwrap();
     put(&own.join("options.txt"), "fov:70\n");
@@ -189,9 +190,9 @@ fn an_instance_follows_the_players_answers() {
         fs::read_to_string(own.join("horizon-player.txt")).unwrap(),
         "name:Player123\n"
     );
-    assert_eq!(
-        fs::read_to_string(own.join("telemetry/consent.json")).unwrap(),
-        r#"{"version":1}"#
+    assert!(
+        !own.join("telemetry/consent.json").exists(),
+        "the fork copies no telemetry state into instances"
     );
     assert!(horizon_platform::no_ai::is_on(&own));
     horizon_platform::no_ai::set(&main, false).unwrap();

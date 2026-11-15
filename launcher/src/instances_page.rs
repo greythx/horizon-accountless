@@ -725,7 +725,7 @@ impl Launcher {
                 cx.notify();
             })))
         };
-        // Opaque, as the sign-in sheet: it sits over the page's content.
+        // Opaque, like the other modal plates: it sits over the page's content.
         let card = plate::cut(
             theme::night::PIXEL_CORNER,
             2,

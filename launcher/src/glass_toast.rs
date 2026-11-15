@@ -1,5 +1,5 @@
 //! What the launcher just did, said for 4.2 s (the mockup's `say`): on a wide window (1280 px
-//! and more) a line in the top bar between the pages and the account, right-aligned at 70 %;
+//! and more) a line in the top bar between the pages and the icon buttons, right-aligned at 70 %;
 //! narrower, a glass toast along the window's bottom (`hzl-float`, 20 px corners).
 //!
 //! Any handler can say something, even one with only `&mut App`: the line waits here and the

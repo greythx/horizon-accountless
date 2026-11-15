@@ -12,34 +12,60 @@ what *this fork* does differently.
 
 ## What this fork deliberately changes
 
-1. **Microsoft account NOT required to launch.** The launcher starts the game for everyone. Without
-   a signed-in account (or one whose sign-in can't be renewed), the game starts offline. Online-mode
-   (authenticated) servers still need an account that owns Minecraft: Java Edition, as they do
-   upstream.
-2. **The Mojang download stays owner-only.** Downloading the game files from Mojang, and playing on
-   online-mode authenticated servers, remain limited to an account the Minecraft services say owns
-   Minecraft: Java Edition. This is Mojang's requirement, not Horizon's policy, and this fork does
-   not relax it — nor the account requirement of Mojang's servers.
-3. **This build has no `HORIZON_MSA_CLIENT_ID`.** Microsoft sign-in is therefore not offered as
-   something that works: where sign-in appears, it says this build has no sign-in configured.
-   Sign-in buttons, where kept, are optional and only for online play, never to start the game.
-   A fork that wants working Microsoft sign-in must register its own Azure app with Mojang
-   ([docs/microsoft-account.md](docs/microsoft-account.md)) and build with `HORIZON_MSA_CLIENT_ID`
-   set at build time (a run-time override of the same variable works too).
-4. **Play with Friends, LAN and dedicated servers are unaffected.** The game's own behaviour is
-   unchanged; the fork changes only the launcher's sign-in requirement.
-5. **Upstream `main` is synced into this fork by merge.** [GOVERNANCE.md](GOVERNANCE.md) documents
+1. **No Microsoft account system at all.** There is no sign-in, no accounts.json, no Minecraft
+   session hand-off, no account settings or top-bar chip, no MCP or CLI account tools. The fork has
+   no `HORIZON_MSA_CLIENT_ID` and never will, so nothing about Microsoft sign-in exists here:
+   - the game is prepared **only from the player's own Minecraft install** (any launcher's: the
+     official one, Prism, MultiMC, the Modrinth App, ATLauncher, GDLauncher), never downloaded
+     from Mojang for an "owner". One file does come from Mojang on a fresh prepare: the pinned
+     version's server jar, whose address is in your own install's version json — Horizon's
+     preparer needs it, exactly as upstream's `PLAY.txt` instructs the same download;
+   - Java Edition (Minecraft proper, as instances of "Vanilla" or "Modded") starts from that same
+     install, with an offline placeholder name; online-mode servers refuse it, as they would any
+     offline launch;
+   - the game itself downloads upstream Horizon's unmodified release build from
+     [github.com/horizon-rust/horizon](https://github.com/horizon-rust/horizon) releases, checked
+     against the release's signed checksums; that is this fork's only source of the game binary.
+     When GitHub's API rate-limits (or is unreachable), the release list and other API reads of
+     Horizon's repository may be served by Horizon's read-only GitHub mirror
+     (`mcp.playhorizon.dev/github/public`, replaced by `HORIZON_GITHUB_MIRROR`); the game binary
+     itself downloads from GitHub's release asset URLs. Building from source works too.
+2. **No telemetry or data collection.** No "I'm playing" ping, no consent screen, no data-collection
+   settings or CLI, no `telemetry` code paths in the launcher, no phone-home of any kind. The fork
+   keeps no counters of players and shows none ("N playing now", "M on the official SMP").
+3. **No ads or promotion.** No partner ("Sculk Hosting") banner or card anywhere, no Discord,
+   Sponsor or Website buttons in the sidebar/topbar/settings/crash page, no "What's new"/patch-log
+   feed of upstream's release notes on Home, and no Horizon official-server entry seeded into the
+   game's server list. Horizon's registry (the mod browser's "Horizon" source) remains listed:
+   it is how upstream content mods are distributed.
+4. **No launcher self-update. Ever.** The launcher never replaces itself with upstream's build, and
+   never redirects elsewhere for one: the update machinery, the Updates settings page, the "Check
+   now" flow and the `update`/`account`/`data`/`links` CLI commands are gone. New Horizon game
+   versions install by hand (`horizon-launcher install`, or the Versions page); nothing about the
+   launcher moves by itself.
+5. **Wardrobe, Shop and the friends invite bar are gone.** Horizon's cosmetics service is not
+   contacted; there is no cosmetics tab, no cosmetics settings, no `horizon-friends` invite code on
+   Home, and no `horizon-friends` dependency.
+6. **Play with Friends' launcher side is gone** (the friend-code invite row on Home and in the Play
+   menu). LAN and dedicated servers are unaffected, as is the Tailscale feature for sharing your
+   own server over Tailscale (`Servers`, "friends over the internet"), which keeps working with a
+   Tailscale access token the player pastes in.
+7. **Upstream `main` is synced into this fork by merge.** [GOVERNANCE.md](GOVERNANCE.md) documents
    how Horizon the project is run; it is not binding on this fork, and the fork does not edit it.
-6. **No pushes to upstream.** This fork never pushes to `horizon-rust/horizon`. Tag releases are
-   not cut here (no Actions); any release published by this fork is a community build, not an
-   official Horizon release.
+8. **No pushes to upstream.** This fork never pushes to `horizon-rust/horizon`. Upstream releases
+   are not republished from here; any release published by this fork is a community build, not an
+   official Horizon release, and none is planned yet (releases may come later).
+9. **Hosted servers always run offline-mode.** Servers created by the launcher (Servers page and
+   `servers create`) always start with `--offline`: with no accounts anywhere in this fork, there is
+   no Minecraft account verification for them to do. Hosted servers cannot run online mode in this
+   fork (no sign-in anywhere), and the launcher does not expose the online-mode toggle.
 
 Everything else — the game, the mods system, the launcher's features — is built from the upstream
-source with the change above. If something looks different from upstream, that difference is a bug or
+source with the changes above. If something looks different from upstream, that difference is a bug or
 a merge from upstream, never a silent relicensing.
 
 ## Building
 
-See [launcher/README.md](launcher/README.md) and [docs/native-client.md](docs/native-client.md). Without
-a `HORIZON_MSA_CLIENT_ID`, the built launcher starts the game offline and says so where it would
-offer Microsoft sign-in.
+See [launcher/README.md](launcher/README.md) and [docs/native-client.md](docs/native-client.md). There
+is nothing to configure: the built launcher starts the game offline, from the player's own Minecraft
+install.

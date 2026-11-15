@@ -86,8 +86,8 @@ horizon-prepare --check --output PREPARED
   would give. Every file is still checked against the pins. When an earlier import beside the preparer is still
   verified, it is reused and these files aren't read.
 - `--server-jar PATH`: the first `--prepare` needs the server jar, which no launcher keeps. Horizon never
-  downloads it; a launcher downloads it (the version JSON's `downloads.server`) only for a signed-in account
-  that owns Java Edition, as `horizon-launcher` does.
+  downloads it; a launcher downloads it (the version JSON's `downloads.server`) for a preparation,
+  unconditionally in this fork (for a signed-in account in upstream).
 - `--java-home PATH`: a Java of the pinned version that the launcher manages, tried after `JAVA_HOME` and the
   `PATH`, before the official launcher's runtimes.
 - Exit codes: 0 done, 1 failed or gaps found, 2 a refused command line.

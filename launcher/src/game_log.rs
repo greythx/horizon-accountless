@@ -3,8 +3,8 @@
 //! Sharing uploads the log to mclo.gs, and only when the player asks (a click, or `logs share`).
 //! mclo.gs is a paste service made for Minecraft logs by Aternos: no account, links expire after
 //! 90 days unread, and the uploader gets a token that deletes the paste. Before anything leaves
-//! the computer, [`private`] takes out the player's home folder, their user name and their
-//! account names.
+//! the computer, [`private`] takes out the player's home folder, their user name and the player
+//! name in each game folder.
 use std::path::Path;
 
 /// mclo.gs's API; `HORIZON_LAUNCHER_PASTE_URL` points it elsewhere for tests.
@@ -29,11 +29,10 @@ pub fn matches(line: &str, search: &str) -> bool {
         .all(|w| line.contains(&w.to_lowercase()))
 }
 
-/// The names to take out of a log: the account names, the offline player name kept in each game
-/// folder (`horizon-player.txt`), and the computer's user name.
+/// The names to take out of a log: the offline player name kept in each game folder
+/// (`horizon-player.txt`), and the computer's user name.
 pub fn names(homes: &[&Path]) -> Vec<String> {
-    let accounts = crate::account::Accounts::load();
-    let mut names: Vec<String> = accounts.accounts.into_iter().map(|a| a.name).collect();
+    let mut names: Vec<String> = Vec::new();
     for home in homes {
         if let Ok(name) = std::fs::read_to_string(home.join("horizon-player.txt")) {
             names.push(name.trim().to_string());

@@ -1,8 +1,8 @@
 //! The Create a server dialog in the glass look (the mockup's `ServerModal`, horizon-site
 //! `components/launcher/server-modal.tsx`): one plate round at 28 over the dimmed page. On the
 //! left, what the server will be (a picture, its name and its rules); on the right, its name,
-//! world, game mode, difficulty, how many players, who may join and whether accounts are
-//! checked; the EULA, Cancel and Create at the foot. Dark appearance only.
+//! world, game mode, difficulty, how many players and who may join; the EULA, Cancel and Create
+//! at the foot. Dark appearance only.
 use super::*;
 use crate::glass_instance::{choice, choice_text, list_box, list_choice, section, tick};
 use crate::glass_ui::{self as ui, white};
@@ -222,7 +222,7 @@ impl Launcher {
         let (new_world, copy, worlds) = (c.new_world, c.copy.clone(), c.worlds.clone());
         let details = c.details.clone();
         let (mode, difficulty, max) = (c.mode, c.difficulty, c.max_players);
-        let (friends_only, check, friends) = (c.friends_only, c.check_accounts, c.friends.clone());
+        let (friends_only, friends) = (c.friends_only, c.friends.clone());
         let creating = self.servers.creating;
         // The mockup's `clamp(1.6rem, 2.4vw, 2.1rem)`.
         let size = (self.window_width * 0.024).clamp(25.6, 33.6);
@@ -517,33 +517,6 @@ impl Launcher {
             );
         }
 
-        // Account checks (not in the mockup's words: Horizon players sign in with Microsoft now).
-        let accounts = div()
-            .flex()
-            .items_start()
-            .justify_between()
-            .gap(px(24.))
-            .p(px(16.))
-            .rounded(px(radius::POPOVER))
-            .bg(white(0.04))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .child(ui::text(15., FontWeight::SEMIBOLD, ink::FULL).child(tr("Check Minecraft accounts")))
-                    .child(
-                        ui::text(13., FontWeight::NORMAL, ink::QUIET)
-                            .mt(px(2.))
-                            .max_w(px(560.))
-                            .line_height(px(19.5))
-                            .child(tr("On: every player signs in with Microsoft, so nobody can join under someone else's name. Turn it off only if a player can't sign in.")),
-                    ),
-            )
-            .child(
-                ui::toggle("create-accounts", check, self.look.accent, self.look.on_accent, &t)
-                    .on_click(set(cx, |c| c.check_accounts = !c.check_accounts)),
-            );
-
         let body = div()
             .id("create-body")
             .flex()
@@ -562,8 +535,7 @@ impl Launcher {
             .child(world)
             .child(section(tr("Game mode").into(), None, modes))
             .child(numbers)
-            .child(section(tr("Who can join").into(), None, who))
-            .child(accounts);
+            .child(section(tr("Who can join").into(), None, who));
         div()
             .flex()
             .flex_col()
@@ -577,24 +549,17 @@ impl Launcher {
     /// The friends let in, as chips with their face (the first is an operator), then a field to add one.
     fn create_friends(&mut self, friends: &[String], cx: &mut Context<Self>) -> Div {
         let t = self.theme;
-        let own = self
-            .accounts
-            .selected()
-            .map(|a| (a.name.clone(), a.uuid.clone()));
         let mut chips = div().mt(px(12.)).flex().flex_wrap().gap(px(8.));
         for (i, name) in friends.iter().enumerate() {
-            let face = match &own {
-                Some((n, uuid)) if n == name => self.head(uuid, 30.).rounded(px(8.)),
-                _ => div()
-                    .flex()
-                    .flex_none()
-                    .items_center()
-                    .justify_center()
-                    .size(px(30.))
-                    .rounded(px(8.))
-                    .bg(white(fill::BUTTON))
-                    .child(ui::icon("user", 16., white(ink::BODY))),
-            };
+            // No face: an offline name's UUID the server would pick is none of ours to invent.
+            let face = div()
+                .flex_none()
+                .items_center()
+                .justify_center()
+                .size(px(30.))
+                .rounded(px(8.))
+                .bg(white(fill::BUTTON))
+                .child(ui::icon("user", 16., white(ink::BODY)));
             let mut chip = div()
                 .flex()
                 .items_center()

@@ -4,7 +4,7 @@
 //! <https://support.modrinth.com/en/articles/8802351-modrinth-modpack-format-mrpack>), its
 //! `overrides/` and `client-overrides/` copied into the instance's folder, and each of its
 //! `files` downloaded and checked against its hash ([`crate::import`]). The game and the loader
-//! come with the first Play, for an account that owns the game.
+//! come with the first Play, read from the player's own install.
 use crate::import;
 use crate::instances::{self, Instance};
 use crate::loaders::{Kind, Loader};

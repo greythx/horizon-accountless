@@ -27,7 +27,7 @@ pub(super) struct Internet {
     state: Option<State>,
     reading: bool,
     read: Option<Instant>,
-    /// The access token, once read from the keychain (None: not read yet; Some(None): none).
+    /// The access token, once read from the secrets file (None: not read yet; Some(None): none).
     token: Option<Option<String>>,
     asking_token: bool,
     invites: Option<Result<Vec<Invite>, String>>,
@@ -105,7 +105,7 @@ impl Launcher {
         std::thread::spawn(move || {
             let _ = tx.send(Event::State(tailscale::status()));
             if want_token {
-                let token = account::keychain().get(tailscale::TOKEN_KEY).ok().flatten();
+                let token = horizon_launcher::secrets_file::get(tailscale::TOKEN_KEY).ok().flatten();
                 let _ = tx.send(Event::Token(token));
             }
         });
@@ -175,19 +175,13 @@ impl Launcher {
         }
         self.servers.text(Field::Token).set(String::new());
         self.internet.asking_token = false;
-        self.internet.message = match account::keychain().set(tailscale::TOKEN_KEY, &token) {
-            Ok(()) if account::keychain().persistent() => None,
-            Ok(()) => Some(Ok(
-                "No keychain here: the token is kept until the launcher closes.".into(),
-            )),
-            Err(e) => Some(Err(e)),
-        };
+        self.internet.message = horizon_launcher::secrets_file::set(tailscale::TOKEN_KEY, &token).err().map(Err);
         self.internet.token = Some(Some(token));
         self.internet_load();
     }
 
     fn forget_token(&mut self) {
-        let _ = account::keychain().delete(tailscale::TOKEN_KEY);
+        let _ = horizon_launcher::secrets_file::delete(tailscale::TOKEN_KEY);
         let i = &mut self.internet;
         i.token = Some(None);
         i.invites = None;
@@ -589,7 +583,7 @@ impl Launcher {
                             .child(link("ts-keys", "Make a token", tailscale::KEYS)),
                     )
                     .child(line(
-                        tr("Settings, Keys, Generate access token. It's kept in this computer's keychain and only sent to Tailscale.")
+                        tr("Settings, Keys, Generate access token. It's kept in the launcher's data folder, readable only by you, and only sent to Tailscale.")
                             .into(),
                     ));
             } else {

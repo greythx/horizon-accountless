@@ -57,28 +57,25 @@ MCP: none: the player's switch.
 
 ## `horizon-launcher prepare`
 
-Prepare a version's resources from your own Minecraft install, or from Mojang.
+Prepare a version's resources from your own Minecraft install.
 
     horizon-launcher prepare
 
 - `--minecraft`: The game folder of the official launcher, Prism Launcher, MultiMC, the Modrinth App, ATLauncher or GDLauncher (default: the launcher's, then every launcher's default)
-- `--download`: Download Minecraft from Mojang for the signed-in account that owns it, instead of using an install
 
 MCP: `prepare`.
 
 ## `horizon-launcher play`
 
-Start the client (offline without a signed-in account).
+Start the client (offline).
 
     horizon-launcher play
 
-- `--instance`: The instance to play (its name or id; default: the selected one). A Java instance starts its Minecraft: Java Edition, downloaded with its Java the first time
+- `--instance`: The instance to play (its name or id; default: the selected one). A Java instance starts its Minecraft: Java Edition from your own install, with its Java downloaded the first time
 - `--world`: Open or create this world (a folder under saves) at once
 - `--creative`: Creative mode for a new world
-- `--join`: Join a friend's world with its invite code
 - `--server`: Join this server at once: an address, or a server of the list by name or position
 - `--arg`: An extra argument for the game, passed through as-is (repeatable), for example --server-thread
-- `--account`: Play this launch as this signed-in account (its name or UUID), without changing the one `account select` picked: several games can play as several accounts at once
 
 MCP: `play`, then the `game_*` tools.
 
@@ -130,79 +127,13 @@ Show a release's patch notes (default: the newest).
 
 MCP: `notes`.
 
-## `horizon-launcher links`
-
-Show the Discord, sponsor and website links.
-
-    horizon-launcher links
-
-MCP: `links`.
-
-## `horizon-launcher account list`
-
-The signed-in accounts and which one plays.
-
-    horizon-launcher account list
-
-MCP: `account_list`.
-
-## `horizon-launcher account sign-in`
-
-Sign in with a Microsoft account in your browser (device code). Only for online play; the game starts offline without one.
-
-    horizon-launcher account sign-in
-
-- `--for`: Sign this account (name or UUID) in again: another Microsoft account is refused and who plays stays the same
-
-MCP: `account_sign_in`.
-
-## `horizon-launcher account refresh`
-
-Renew an account's session now, even when its access token is still fresh.
-
-    horizon-launcher account refresh <WHO>
-
-- `WHO`
-
-MCP: `account_refresh`.
-
-## `horizon-launcher account session`
-
-Renew an account's session for a game already running: prints the read-once session file it hands over (`--json`: {"session_file"} or {"authentication"} when it can't).
-
-    horizon-launcher account session <WHO>
-
-- `WHO`
-
-MCP: none: the game's own session handoff.
-
-## `horizon-launcher account sign-out`
-
-Sign out: the account's tokens leave the keychain (and the secrets file, where it kept them).
-
-    horizon-launcher account sign-out <WHO>
-
-- `WHO`: Its name or UUID
-
-MCP: `account_sign_out`, needs `confirm: true`.
-
-## `horizon-launcher account select`
-
-Play as this account.
-
-    horizon-launcher account select <WHO>
-
-- `WHO`
-
-MCP: `account_select`.
-
 ## `horizon-launcher settings`
 
-Show the launcher's settings, or set one (the Settings page): selected-version TAG, game-architecture auto|x64|arm64, minecraft-dir PATH, server-dir PATH ("default" resets a folder), install-new-versions on|off, prune-old-versions on|off (delete old versions after an install, keeping the selected one, the ones instances use and the newest few), keep-versions N (how many of the newest to keep; "default" is 2), opening-animation on|off, proxy http://host:port|socks5://host:port ("default" removes it), while-playing stay|minimize|hide (what the window does while the game runs), language system|en|fr|ru|de|zh|es|uk|pl (the window's language; system follows the computer's), accent violet|blue|teal|green|amber|red|pink|#rrggbb|DEGREES (a named accent, any colour, or any hue), background PATH (a picture behind Home; "default" shows Horizon's landscape), native-cache-gib N (combined native compilation cache limit in GiB, default 30; 0 disables automatic cleanup), native-profile performance|dev|release (the profile native mods build with: performance is incremental, dev rebuilds a mod quickest for a slow game, release is slowest to build and slightly faster to play).
+Show the launcher's settings, or set one (the Settings page): selected-version TAG, game-architecture auto|x64|arm64, minecraft-dir PATH, server-dir PATH ("default" resets a folder), prune-old-versions on|off (delete old versions after an install, keeping the selected one, the ones instances use and the newest few), keep-versions N (how many of the newest to keep; "default" is 2), opening-animation on|off, proxy http://host:port|socks5://host:port ("default" removes it), while-playing stay|minimize|hide (what the window does while the game runs), language system|en|fr|ru|de|zh|es|uk|pl (the window's language; system follows the computer's), accent violet|blue|teal|green|amber|red|pink|#rrggbb|DEGREES (a named accent, any colour, or any hue), background PATH (a picture behind Home; "default" shows Horizon's landscape), native-cache-gib N (combined native compilation cache limit in GiB, default 30; 0 disables automatic cleanup), native-profile performance|dev|release (the profile native mods build with: performance is incremental, dev rebuilds a mod quickest for a slow game, release is slowest to build and slightly faster to play).
 
     horizon-launcher settings [KEY] [VALUE]
 
-- `KEY` (selected-version, minecraft-dir, server-dir, install-new-versions, prune-old-versions, keep-versions, opening-animation, game-architecture, proxy, while-playing, language, accent, background, native-profile, native-cache-gib)
+- `KEY` (selected-version, minecraft-dir, server-dir, prune-old-versions, keep-versions, opening-animation, game-architecture, proxy, while-playing, language, accent, background, native-profile, native-cache-gib)
 - `VALUE`: The new value (with KEY)
 
 MCP: `settings`.
@@ -219,7 +150,7 @@ MCP: `game_args`.
 
 ## `horizon-launcher share-log`
 
-Upload an instance's latest.log to mclo.gs (a paste service for Minecraft logs) and print its link, for a bug report: only when the player asks. The home folder, the user name and the account names are taken out first; the link expires after 90 days unread.
+Upload an instance's latest.log to mclo.gs (a paste service for Minecraft logs) and print its link, for a bug report: only when the player asks. The home folder, the user name and the player name are taken out first; the link expires after 90 days unread.
 
     horizon-launcher share-log
 
@@ -248,16 +179,6 @@ Print the end of the game's log (logs/latest.log in the game folder), or its new
 
 MCP: `logs`.
 
-## `horizon-launcher update`
-
-Look for a newer Horizon release and launcher, and install them.
-
-    horizon-launcher update
-
-- `--check`: Only report what is available
-
-MCP: `update`.
-
 ## `horizon-launcher desktop-entry`
 
 Linux: put Horizon in the applications menu (an entry and the icon, under $XDG_DATA_HOME), or take it out with --remove.
@@ -267,81 +188,6 @@ Linux: put Horizon in the applications menu (an entry and the icon, under $XDG_D
 - `--remove`: Remove the entry and the icon, and stop adding them back
 
 MCP: `desktop_entry`.
-
-## `horizon-launcher data status`
-
-What is allowed, the install ID and how many items wait (the default).
-
-    horizon-launcher data status
-
-MCP: `data_status`.
-
-## `horizon-launcher data allow`
-
-Turn kinds on: performance, crashes, bugs, benchmarks, or all.
-
-    horizon-launcher data allow <KINDS>...
-
-- `KINDS`
-
-MCP: `data_allow`, only when the player asks.
-
-## `horizon-launcher data deny`
-
-Turn kinds off: performance, crashes, bugs, benchmarks, or all.
-
-    horizon-launcher data deny <KINDS>...
-
-- `KINDS`
-
-MCP: `data_deny`.
-
-## `horizon-launcher data show`
-
-Print exactly what would be sent.
-
-    horizon-launcher data show
-
-MCP: `data_show`.
-
-## `horizon-launcher data delete`
-
-Delete everything sent from here, and what waits, and take a new install ID.
-
-    horizon-launcher data delete
-
-MCP: `data_delete`, needs `confirm: true`.
-
-## `horizon-launcher data send`
-
-Send what is waiting now.
-
-    horizon-launcher data send
-
-MCP: `data_send`, only when the player asks.
-
-## `horizon-launcher data bug`
-
-Send a bug report you write; it is printed first, as it would leave.
-
-    horizon-launcher data bug <TEXT>
-
-- `TEXT`
-- `--log`: Add the end of the game's log (scrubbed, without chat)
-- `--yes`: Send without asking
-
-MCP: `data_bug`, only when the player asks.
-
-## `horizon-launcher data benchmark`
-
-Upload a benchmark report (docs/benchmark-report.md); it is printed first.
-
-    horizon-launcher data benchmark <FILE>
-
-- `FILE`
-- `--yes`
-
-MCP: `data_benchmark`, only when the player asks.
 
 ## `horizon-launcher instance list`
 
@@ -458,7 +304,7 @@ MCP: `instance_select`.
 
 ## `horizon-launcher instance version`
 
-Keep an instance on one installed Horizon version, or "latest" to follow updates again.
+Keep an instance on one installed Horizon version, or "latest" to follow the launcher's selection.
 
     horizon-launcher instance version <INSTANCE> <VERSION>
 
@@ -468,7 +314,7 @@ MCP: `instance_version`.
 
 ## `horizon-launcher instance export`
 
-Export an instance (or a port) to share: its settings, packs, Horizon mods and the worlds named, as a .mrpack (resource packs from Modrinth listed by download) or a zip. Never logs, screenshots or account data; worlds go without their per-player files.
+Export an instance (or a port) to share: its settings, packs, Horizon mods and the worlds named, as a .mrpack (resource packs from Modrinth listed by download) or a zip. Never logs, screenshots or personal session files; worlds go without their per-player files.
 
     horizon-launcher instance export [INSTANCE]
 
@@ -966,7 +812,7 @@ Create a server; with no options it is a new world, survival, normal, 10 players
 - `--difficulty` (peaceful, easy, normal, hard)
 - `--max-players`
 - `--open`: Let anyone in (no whitelist)
-- `--offline`: Do not check players' Minecraft accounts (offline mode: anyone can use any name)
+- `--offline`: Deprecated no-op: this fork's servers always run offline
 - `--player`: Who may join (repeatable); the first becomes an operator
 - `--accept-eula`: Agree to the Minecraft EULA (https://aka.ms/MinecraftEULA)
 

@@ -25,7 +25,7 @@ The opening, then Play ([clip](docs/opening.webm)):
   a copy of the selected release or Nightly's folder, game files included, with that program as the
   game. Imported builds are listed apart as unsigned, and no update replaces them.
 - **Move data to another drive**: Settings → Data folder → Move… copies the launcher's
-  installations, downloads and account files, the game's worlds and instances, and managed native
+  installations and downloads, the game's worlds and instances, and managed native
   build data to an empty folder. Close games and servers and wait for active jobs first. The launcher
   exits while the copy is verified, switches its location only after success, then reopens. Old folders
   remain as recovery copies and still use disk space; verify your worlds and instances before removing
@@ -37,30 +37,22 @@ The opening, then Play ([clip](docs/opening.webm)):
   absolute pointer file for portable installations. Nonempty `HORIZON_LAUNCHER_HOME` and `HORIZON_HOME`
   still override their respective roots; remove these overrides before using Move. A missing destination
   fails explicitly instead of silently creating empty data in the default location.
-- **Play**: prepares resources as `PLAY.txt` describes (your launcher's 26.3 install, the
-  26.3 server jar from that version's own json, and Java 25) and copies its sounds from your
-  launcher's asset store (`horizon-prepare sounds`; a launcher install without them only
-  leaves the game silent), then starts the client. Preparing is
+- **Play**: prepares resources as `PLAY.txt` describes (your own installed copy of Minecraft
+  26.3, the 26.3 server jar from that install's version json — downloaded from Mojang, the one
+  file Horizon's preparation takes from there — and Java 25) and copies its sounds from your
+  install's asset store (`horizon-prepare sounds`; an install without them only
+  leaves the game silent), then starts the client. This fork never downloads game files from
+  Mojang: preparation itself always comes from your own Minecraft install (any launcher's — the
+  official one, Prism, MultiMC, the Modrinth App, ATLauncher, GDLauncher; Settings → Minecraft
+  folder, or **From my install** on the Play page). If your install lacks the pinned version, the
+  launcher says so instead of downloading it. Preparing is
   horizon-prepare: linked into the launcher, used in-process when a version ships the same
   preparer sources, else that version's own `horizon-prepare`; versions released before it
   still prepare with their Python script and need Python 3.10+. Before importing,
   preparation reuses checksum-verified game jars and libraries from the current
   or another installed Horizon version, so the original Minecraft install is
-  only required when no valid imported copy exists.
-- **Download and prepare**: for a signed-in account that owns the game (asked again first),
-  the launcher downloads the pinned version from Mojang itself (piston-meta, piston-data,
-  libraries.minecraft.net, resources.download.minecraft.net; never a mirror) into `minecraft/`
-  in its data folder, in the official launcher's layout: the version file, the client jar, this
-  system's libraries, the asset index and the assets. Every file must have the size and sha1
-  Mojang lists. The Play page shows how far it is and has Cancel; files already whole are kept,
-  so the next try goes on from there. **From my install** prepares from the player's own launcher
-  instead, and an install that lacks the version falls back to the download. **Play** on a version
-  not prepared yet does it all for an owner, as the official launcher does: it prepares from the
-  install when there is one, else downloads (with Mojang's Java when no Java 25 is installed), then
-  starts the game. With no install on the computer the Play page offers the download alone and the
-  Minecraft folder row says none is needed. Without an account that owns the game the Play page
-  still plays, preparing from your own install (offline); only the Mojang download needs an
-  owning account. `horizon-launcher prepare --download`.
+  only required when no valid imported copy exists. `horizon-launcher prepare [--minecraft <dir>]
+  [--version <tag>]`.
 - **Mods**: tabs for Mods, Modpacks, Resource packs, Shader packs and Data packs. Mods, Modpacks,
   Resource packs and Data packs (into the world picked there) search Horizon's own registry, with
   its categories as filters, or Modrinth (CurseForge support is coming soon); Shader packs search
@@ -91,7 +83,7 @@ The opening, then Play ([clip](docs/opening.webm)):
   web panel**, and four tabs: **Overview**; **Players** (online players with Make operator, Kick
   and Ban; who may join, with Friends only, Let in and Remove; Unban); **Settings** (the message
   in the server list, game mode, difficulty, PvP, most players, view and simulation distance,
-  port, account checks, **Run in the background and at login**); **Backups** (Back up now, the
+  port, **Run in the background and at login**); **Backups** (Back up now, the
   list with dates and sizes, Restore with a confirmation, Back up automatically, and **Updates**:
   Check for updates, Update now with its automatic rollback, and how many older versions to
   keep). Changes the running game can take apply at once, the others say "Restart to apply".
@@ -105,7 +97,8 @@ The opening, then Play ([clip](docs/opening.webm)):
   installed and signed in (with Install, Sign in and Check again; signing in is always yours, in
   Tailscale's own app or page), shows this computer's Tailscale name and address with **Copy**,
   and invites a friend to this one computer: in the admin console, or here with an access token
-  you make there (kept in the system keychain), which also lists invitations with Withdraw /
+  you make there (kept in `secrets.json` in the launcher's data folder, readable only by you),
+  which also lists invitations with Withdraw /
   Stop sharing and offers **Limit them to Minecraft**: when your tailnet has Tailscale's default
   access controls, one click changes them so friends you share with reach only the server's
   port (Remove the limit undoes it); custom access controls are never rewritten, the page gives
@@ -114,22 +107,22 @@ The opening, then Play ([clip](docs/opening.webm)):
   folder stays the first one, "Horizon", exactly where it was; imported and registry modpacks are
   instances too, in their own folders as before; new ones go to `instances/<name>/` in the game's
   folder, empty but for the player's options and name, or a copy of another instance (never its
-  sign-in sessions, logs or data collection state). Names, icons (a block or item texture from the
+  logs and crash reports stay behind). Names, icons (a block or item texture from the
   player's prepared files, or a colour) and groups are kept in `instances.json` in the launcher's
-  data folder, so renaming moves nothing. Every instance follows the launcher's data collection
-  answer and No AI. In the window, **+** beside Instances makes one, the sidebar lists them by
-  group (click one to play it), and Home's Instance row has Edit (name, group, icon), Copy and
-  Open folder. The Instance row shows its play time and when it was last played: every run started
+  data folder, so renaming moves nothing. In the window, **+** beside Instances makes one, the
+  sidebar lists them by group (click one to play it), and Home's Instance row has Edit (name,
+  group, icon), Copy and Open folder. The Instance row shows its play time and when it was last played: every run started
   from the window or `horizon-launcher play` adds to it (`instance list` shows it too). Each
-  instance plays the launcher's version, which follows updates, unless the Play page's version
-  picker keeps it on another installed one (to keep an old world on the version it was made
-  with); picking the version marked "auto-update" lets it follow again.
+  instance plays the launcher's selected version, unless the Play page's version picker keeps it
+  on another installed one (to keep an old world on the version it was made with); picking the
+  version marked "auto-update" lets it follow the selection again.
 - **Export**: Home's Instance row has **Export…**: the selected instance (or a port) as a `.mrpack`
   (Modrinth's modpack format: resource packs the browser installed from Modrinth are listed by
   their download, the rest is in `overrides/`) or a `.zip` of the game folder's layout, with the
   worlds switched on. It is written to `exports/` in the launcher's data folder (**Show in
   folder**). Only settings (options.txt, horizon-*.txt, servers.dat), resource and shader packs,
-  `horizon-mods/` and `config/` go in: never logs, screenshots, backups, caches or account files;
+  `horizon-mods/` and `config/` go in: never logs, screenshots, backups, caches or personal
+  session files;
   a world goes without `playerdata/`, `stats/` and `advancements/`, and its level.dat without the
   player's UUID. `horizon-launcher instance export [<instance>] [--format mrpack|zip] [--world
   <w>]… [--out <file>]`.
@@ -166,12 +159,11 @@ The opening, then Play ([clip](docs/opening.webm)):
   (`horizon_launcher::shortcut`). **Remove shortcut** moves it to the trash; it is found by the
   instance id inside it, so a rename doesn't lose it. `horizon-launcher instance shortcut
   [instance] [--remove]`; `HORIZON_LAUNCHER_DESKTOP` points it at another folder.
-- **Accounts and quick switch**: the top bar's account chip opens a menu of the signed-in
-  Microsoft accounts, where there are any. Picking one plays as it from the next Play. This build
-  starts the game offline without an account ([FORK.md](../FORK.md)); online servers need an
-  account that owns Minecraft: Java Edition. The
-  Console's Share log takes the account names out of the log. `horizon-launcher account select
-  <name>`.
+- **Offline play**: this build starts the game offline — there is no sign-in anywhere in the
+  launcher and no Microsoft connection ([FORK.md](../FORK.md)). Online-mode (authenticated)
+  servers still need a Microsoft account that owns Minecraft: Java Edition, as other launchers
+  do; this fork has no way to sign in to one. The Console's Share log takes the player name and
+  the computer's user name out of the log.
 - **Accent and Home background**: on top of Dark, Light or System, Settings > Launcher picks an
   accent (Horizon's violet, blue, teal, green, amber, red or pink, any hue, or any colour typed as
   hex in the dark look) and a picture of the player's own behind Home (PNG, JPEG or WebP, cropped
@@ -191,7 +183,7 @@ The opening, then Play ([clip](docs/opening.webm)):
   word, any case), Follow to keep the newest line in view, Copy, and Open logs folder. Warnings
   and errors stand out. **Share log…** uploads the log to [mclo.gs](https://mclo.gs), a paste
   service for Minecraft logs, only after the player confirms; the home folder, the user name and
-  the account names are taken out first (`horizon_launcher::game_log`), and **Delete it** removes
+  the player name are taken out first (`horizon_launcher::game_log`), and **Delete it** removes
   the paste. `horizon-launcher share-log [--instance]` and `unshare-log <id:token>`;
   `HORIZON_LAUNCHER_PASTE_URL` points it at a test server.
 - **Worlds**: Home lists the selected instance's worlds (picture, mode, version, last played,
@@ -230,36 +222,27 @@ The opening, then Play ([clip](docs/opening.webm)):
   keeping every field the launcher doesn't show and the servers joined with Direct Connection. The
   same from the command line: `horizon-launcher multiplayer [list|add|remove] [--instance <name>]`
   and `horizon-launcher play --server <address or name>`.
-- **Patch notes**: each release's notes, newest first, with a link to GitHub Sponsors. Quiet "Sponsor", "Discord" and "Website" links sit in the sidebar footer.
+- **Patch notes**: each release's notes, shown under it on the Versions page (a toggle, opening the
+  release's own Markdown), or for the terminal: `horizon-launcher notes [<tag>]`.
 
 Data lives in the platform's data directory (`~/.local/share/horizon-launcher` on Linux,
 `~/Library/Application Support/horizon-launcher` on macOS, `%APPDATA%\horizon-launcher` on
-Windows): `versions/<tag>/`, `server-jars/`, `server/`, `settings.json`, and for the Servers
+Windows): `versions/<tag>/`, `server-jars/`, `server/`, `settings.json`, `secrets.json` (the
+Tailscale access token, if set), and for the Servers
 page `servers.json` (the list), `servers/<name>/` (the servers created there) and
 `server-runtime/` (the programs and game files they run).
 
-- **Settings**: install new Horizon versions automatically (on unless you turn it off; the
-  selected version only moves to the new one if you were on the newest), the opening animation,
-  what the window does while you play (stays by default; Minimise, or Hide on macOS, puts it away
-  when the game starts and brings it back to the front when the game closes; `settings
-  while-playing stay|minimize|hide`), the game's extra command-line arguments, an HTTP proxy for
-  downloads, and the launcher's own version and update state. On Windows ARM, **Game
-  architecture** chooses Automatic, x64 or ARM64 independently from the launcher; automatic
-  preserves the launcher's architecture, and a release without ARM64 uses the signed x64 build.
-  A changed choice reinstalls the selected version when automatic updates are on, and the game
-  won't launch an installed build that conflicts with a manual choice. `horizon-launcher settings
-  game-architecture auto|x64|arm64`.
-- **Updates**: Horizon ships only the Nightly (since 2026-10-28, docs/release-flow.md). The
-  launcher installs the current one (the `nightly` pre-release, checksums signed for the Nightly
-  channel) as `nightly-<date>-<commit>` and selects it when the player was on a Nightly, on the
-  newest release or on nothing; a version picked by hand or pinned by an instance stays, and so
-  does an imported build. Older
-  Nightlies are removed once nothing plays them. Worlds are never touched: they live in the game's
-  folder, not in a version's. The last week's Nightlies (`nightly-<date>`), the `vX.Y.Z`
-  releases and the old Alpha pre-releases stay on the Versions page to install by hand, never as
-  an update. The "Nightly builds" setting and its `nightly` key are gone (an old key is ignored);
-  its "Nightly" instance stays and keeps following the Nightly. The `update_channel` and
-  `beta_builds` keys older launchers wrote are ignored and dropped on the next save.
+- **Settings**: the opening animation, what the window does while you play (stays by default;
+  Minimise, or Hide on macOS, puts it away when the game starts and brings it back to the front
+  when the game closes; `settings while-playing stay|minimize|hide`), the game's extra
+  command-line arguments, an HTTP proxy for downloads, and build housekeeping: `prune-old-versions`
+  on|off (delete old builds after an install, keeping the selected one, the ones instances use and
+  the newest few; `keep-versions N` sets how many, default 2 — builds you installed by hand are
+  never removed). On Windows ARM, **Game architecture** chooses Automatic, x64 or ARM64
+  independently from the launcher; automatic preserves the launcher's architecture, and a release
+  without ARM64 uses the signed x64 build. When a manual choice doesn't match an installed build,
+  the Versions page offers **Install selected build**, and the game won't launch an installed build
+  that conflicts with the choice. `horizon-launcher settings game-architecture auto|x64|arm64`.
 - **Game arguments**: extra arguments added to the game's command line (for example
   `--server-thread`), one line where quotes group a word with spaces. They are appended after the
   launcher's own arguments, kept as `game_args` in `settings.json`, and apply the next time the
@@ -268,16 +251,13 @@ page `servers.json` (the list), `servers/<name>/` (the servers created there) an
 - **Proxy**: when the internet here needs one (a school's, an office's, a country where a host is
   unreachable), Settings' Proxy takes the `http://host:port` or `socks5://host:port` address your
   proxy app listens on, and
-  every download goes through it: Horizon's releases and the launcher's own update, Minecraft's
-  files and Java from Mojang, Modrinth, CurseForge, Horizon's mod registry, pictures, Microsoft
-  sign-in, and the jars a modpack import fetches. It is kept as `proxy` in `settings.json`, and
+  every download goes through it: Horizon's releases, Java from Mojang, Modrinth, CurseForge,
+  Horizon's mod registry, pictures, Tailscale's API, and the jars a modpack import fetches. It is
+  kept as `proxy` in `settings.json`, and
   `horizon-launcher settings proxy http://127.0.0.1:7890` sets it too ("default" removes it).
   Without one, `HTTPS_PROXY` and `HTTP_PROXY` are used when the launcher is started with them, and
   `NO_PROXY` names the hosts to reach directly, a modpack import's jars included. A server on this
   computer never goes through it.
-- **Links**: the Discord invite, the Sponsors page and the website come from `launcher/links.json` on main
-  (`{"discord": "...", "sponsor": "...", "website": "..."}`), so they change without a launcher release. Offline,
-  the launcher uses the same values built in; an empty address hides its button.
 
 Long pages, dialogs, the server console and data previews have a visible scrollbar when
 their content overflows. Drag the thumb or click the track to navigate without a mouse wheel.
@@ -287,44 +267,22 @@ launcher on every platform: Windows keeps native dragging, resizing, Snap, minim
 maximize/restore and close; Linux keeps the same controls in its client-side title bar, while
 macOS keeps its native traffic-light controls.
 
-## Updates
+## Versions
 
-The launcher looks for a newer Nightly when it starts and every 30 minutes while it is open, and
-shows a small "available, Install" line on Play.
+Nothing in this fork installs or updates by itself, and the launcher never replaces itself: the
+update machinery is gone. Game builds install only when you ask (the Versions page, or
+`horizon-launcher install <tag|latest>`); after an install, older Nightlies the launcher installed
+itself are pruned to the newest few (`prune-old-versions`, on by default; builds you installed by
+hand are never removed). A new launcher means a new build from source ([Building](#building)).
 
 Release lists and commits come from GitHub's API, which allows 60 anonymous calls an hour per
 address: players behind a shared one (a school, a dorm, a carrier's NAT) spend them together.
 So each answer is kept in `cache/github/` in the data folder and used again for 5 minutes without
 asking, then revalidated with its ETag. When GitHub answers with its rate limit, or not at all,
-Horizon's own releases are read through Kira's read-only mirror
-(`https://mcp.playhorizon.dev/github/public`; `HORIZON_GITHUB_MIRROR` replaces it, empty turns it
-off); when both fail the last saved answer is used, else the error names both. The release files
-themselves come from their download links, which that limit doesn't cover.
-
-It also updates itself from GitHub releases tagged `launcher@X.Y.Z` (the game's are `nightly`, and
-`vX.Y.Z` before 2026-10-28; neither is ever taken for the other). Before 0.2 they were `launcher-vX.Y.Z` and `vYYYY.MM.DD`:
-every 0.2 tag counts as newer than all of those (docs/versioning.md). It downloads the new build, checks it
-against the release's signed `SHA256SUMS`, and says "A new version is available" in the sidebar with
-**Update**: the window closes, the launcher's own file runs again as the installer (`apply-update`,
-`src/update_handoff.rs`), which waits for the window's process to exit, puts the new launcher in place (the
-binary, the `.app` bundle or the AppImage) and starts it. Closing the window with an update downloaded installs
-it the same way, so the next start is the new launcher. When the installer can't put it in place, the old
-launcher starts again and says why. Each process stages in its own folder, and the installer checks the signed
-SHA-256 again before anything goes in; when the launcher in place is already that version or newer, it changes
-nothing. Servers keep running through **Update**. A copy that can't replace itself says so at once and offers
-**Download again** (the website's install page): one in a read-only folder (the disk image, or the read-only copy
-macOS runs a downloaded app from until it is moved to Applications), or on Windows one running from the temporary
-folder, as a program opened inside a `.zip` does. `horizon-launcher update` replaces it at once. Development builds and
-`HORIZON_LAUNCHER_NO_SELF_UPDATE=1` never replace themselves.
-
-On Linux the release also comes as an AppImage, `horizon-launcher-linux-x86_64.AppImage`: one file
-to download, make executable and run, with no installation and no `libfuse2` (its runtime mounts
-the image where FUSE 2 is there and unpacks it where it is not). It is the same binary as the
-`.tar.gz`, with the libraries GPUI needs beside it; glibc, the graphics drivers and the session's
-D-Bus stay the machine's, so it needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 and
-newer). A launcher running from one replaces the AppImage itself when it updates
-(`$APPIMAGE`), and the menu entry it writes starts the AppImage rather than the copy inside the
-image, which is gone when the launcher exits.
+Horizon's releases are read through upstream's read-only mirror
+(`https://mcp.playhorizon.dev/github/public`; `HORIZON_GITHUB_MIRROR` replaces it, an empty value
+turns it off); when both fail the last saved answer is used, else the error names both. The release
+files themselves come from their download links, which that limit doesn't cover.
 
 On Linux a release build that starts writes its applications-menu entry only when there is
 none, or when the program the entry starts (its `TryExec`, else its `Exec`) no longer exists.
@@ -333,28 +291,21 @@ never takes it over. Turning the Settings switch on, or `horizon-launcher deskto
 points the entry at this launcher whatever is there.
 
 Linux packagers can set `HORIZON_LAUNCHER_DESKTOP_EXEC` to a wrapper's absolute path.
-Menu entries the launcher writes then start that wrapper, which can
-set `HORIZON_LAUNCHER_NO_SELF_UPDATE=1` to keep launcher updates with the package manager.
+Menu entries the launcher writes then start that wrapper.
 
-Launcher releases are automatic (docs/release-flow.md in the repository): when main changes the
-launcher, `horizon-prepare` or `horizon-theme`, the `launcher` workflow builds Linux, macOS, Windows x64 and
-Windows ARM64 and publishes `launcher-vX.Y.Z` (the next patch, or the next minor after a pull request
-labelled `feature`) with `horizon-launcher-linux-x86_64.tar.gz`,
-`horizon-launcher-linux-x86_64.AppImage`, `horizon-launcher-macos-arm64.zip`,
-`horizon-launcher-macos-x64.zip` (Intel Macs), `horizon-launcher-windows-x64.zip` and
-`horizon-launcher-windows-arm64.zip`, never marked latest. The version is built in from the tag
-(`HORIZON_LAUNCHER_VERSION`); `Cargo.toml`'s version is only what local builds report.
-
-Windows also publishes `horizon-launcher-setup.exe` (x64) and `horizon-launcher-setup-arm64.exe`: the launcher's own
-binary under another name, which opens
-a per-user setup instead of the window (no administrator). It copies itself to
-`%LOCALAPPDATA%\Programs\Horizon Launcher\horizon-launcher.exe`, makes the Start menu shortcut (and the
-desktop one if asked) and an entry in *Apps & features*, then starts the copy. `horizon-launcher-setup.exe
-setup --quiet [--dir <folder>] [--desktop-shortcut]` does the same without a window, and
-`horizon-launcher.exe uninstall` (or `... uninstall --quiet [--remove-data]`) takes it all away again: the
-shortcuts, the registry entries and the install folder. The game's folders are never touched, and the
-launcher's data folder only with `--remove-data`. An installed launcher keeps updating itself, so the
-uninstaller at that path is always the newest one.
+This fork publishes no builds of its own: its release workflow is disabled and paused (FORK.md).
+Upstream publishes the game's builds — the Nightly (`nightly`) since 2026-10-28, and the
+`vX.Y.Z` releases and old Alpha pre-releases before it; `horizon-launcher-setup.exe` (Windows, x64
+and ARM64) was an upstream artifact of the same kind. The tags and how every reader orders them
+are in [docs/versioning.md](../docs/versioning.md). On Windows, the same binary under another name
+opens a per-user setup instead of the window (no administrator): it copies itself to
+`%LOCALAPPDATA%\Programs\Horizon Launcher\horizon-launcher.exe`, makes the Start menu shortcut
+(and the desktop one if asked) and an entry in *Apps & features*, then starts the copy.
+`horizon-launcher-setup.exe setup --quiet [--dir <folder>] [--desktop-shortcut]` does the same
+without a window, and `horizon-launcher.exe uninstall` (or `... uninstall --quiet
+[--remove-data]`) takes it all away again: the shortcuts, the registry entries and the install
+folder. The game's folders are never touched, and the launcher's data folder only with
+`--remove-data`. This fork does not ship or maintain that artifact; it documents what the code does.
 
 ## Command line
 
@@ -386,14 +337,8 @@ and don't set `%ERRORLEVEL%` / `$LASTEXITCODE`. Scripts that need the exit code 
     horizon-launcher play [--version <tag>] [--instance <name>] [--arg <ARG>]...   start the client; --arg passes an extra argument through (repeatable)
     horizon-launcher server [--dir <dir>] [--version <tag>] [--accept-eula]
     horizon-launcher notes [<tag>]                  patch notes as plain text
-    horizon-launcher links                          the Discord, sponsor and website links
     horizon-launcher game-args [<line>]             show or set the extra arguments the game starts with
-    horizon-launcher update [--check]               Horizon and the launcher
     horizon-launcher logs [--lines N] [--crash]     the end of the game's log, or its newest crash report
-    horizon-launcher account [list]                 the Microsoft accounts signed in (* = plays)
-    horizon-launcher account sign-in                sign in in your browser with a code
-    horizon-launcher account sign-out <name>
-    horizon-launcher account select <name>          play as this account
     horizon-launcher instance [list]                the instances and their game folders (* = Play starts it)
     horizon-launcher instance create <name> [--copy <instance>]   empty, or a copy of one's worlds, options and packs
     horizon-launcher instance create <name> --minecraft <1.21.4|latest|latest-snapshot>   a Minecraft: Java Edition instance
@@ -429,15 +374,9 @@ and don't set `%ERRORLEVEL%` / `$LASTEXITCODE`. Scripts that need the exit code 
     horizon-launcher servers run <server> -- <horizon-server command>   for example: servers run "My server" -- start
     horizon-launcher servers forget <server>        take it off the list (its folder stays)
     horizon-launcher benchmark [--repeats N]        measure the launcher (see Performance log)
-    horizon-launcher data [status]                  what data collection is allowed, the install ID, what waits
-    horizon-launcher data allow|deny <kinds|all>    performance, crashes, bugs, benchmarks
-    horizon-launcher data show                      exactly what would be sent
-    horizon-launcher data delete                    delete what was sent and what waits; new install ID
-    horizon-launcher data bug "<text>" [--log]      a bug report, printed for you to confirm first
-    horizon-launcher data benchmark <report.json>   upload a benchmark report, printed first
 
 `--json` prints JSON where there is something to report (`versions`, `install`, `notes`,
-`next`, `links`, `game-args`, `update --check`, `logs`, `account`, `benchmark`, `data`, `modpack`). Errors go to stderr with exit code 1. `server` runs in the terminal,
+`game-args`, `logs`, `benchmark`, `modpack`). Errors go to stderr with exit code 1. `server` runs in the terminal,
 so lines you type reach its console. `HORIZON_LAUNCHER_HOME` replaces the data folder (for
 scripts and tests). Test runs also set `HORIZON_LAUNCHER_TRASH=<folder>` and
 `HORIZON_LAUNCHER_CLIPBOARD=<file>` inside their scratch folders: what Delete would move to the
@@ -455,12 +394,12 @@ command that adds it; for Claude Code:
 (with the full path to the binary if it is not on your `PATH`). Every CLI command is a tool of the
 same name and arguments, generated from the CLI's definition (`src/cli_tools.rs`): `versions`,
 `install`, `remove`, `prepare`, `settings`, `mods_search`, `mods_install`, `modpack_import`,
-`servers_create`, `data_status`... A call runs that command with `--json` and returns its
+`servers_create`... A call runs that command with `--json` and returns its
 output. Tools that delete something (`remove`, `mods_remove`, `modpack_remove`,
-`servers_forget`, `account_sign_out`, `data_delete`) need `confirm: true`. The session runs a few
+`servers_forget`, `worlds_delete`, `screenshots_delete`, `packs_remove`, `multiplayer_remove`,
+`worlds_datapack-remove`, `unshare-log`, `instance_launch`) need `confirm: true`. The session runs a few
 itself, under the CLI's names: `play`, `server` with `server_command`, `server_log` and
-`server_stop`, `account_list` and `account_sign_in` (returns the link and code for the player;
-the sign-in finishes in the background). A server started through MCP stops (cleanly, with
+`server_stop`. A server started through MCP stops (cleanly, with
 `stop`) when the session ends. Starting one needs `accept_eula`, which an agent should only pass
 with the player's consent.
 
@@ -478,30 +417,15 @@ refuses. Every other command keeps working.
 
 The window, the command line and the MCP server all call the same core, `src/backend.rs`.
 
-## Microsoft accounts
+## Minecraft accounts (offline)
 
-This build starts the game without a Microsoft account: offline play, no sign-in required. Online-mode
-(authenticated) servers still need a Microsoft account that owns Minecraft: Java Edition, as they do
-upstream (and as other launchers do), and only an account that owns it can download the game from
-Mojang. In other respects the sign-in flow is the one described upstream: Settings → Accounts signs
-in — the launcher shows a code, you enter it at microsoft.com/link, and the account is checked. The
-game plays as the selected account (else the first); a sign-in that can't be renewed starts the game
-offline anyway. The game binary started directly (`horizon-client`,
-`horizon-ctl launch`), the harnesses and the servers don't go through this check. Tokens live in the system keychain (Keychain,
-Credential Manager, or the Secret Service on Linux), never in a log or the command line;
-`accounts.json` in the data folder keeps only names and UUIDs. On Linux without a keychain they go
-to `account-secrets.json` in the data folder, encrypted and readable by you only, and back to the keychain once it
-answers; on macOS and Windows without one you stay signed in until the launcher closes. The
-Tailscale access token never goes to that file: without a keychain it lasts until the launcher
-closes. When the game starts, it gets the session in a private file it
-deletes as soon as it has read it. Sign out removes the tokens.
-
-**This build has no Microsoft sign-in app registration of its own.** Microsoft sign-in is Horizon's
-Azure app, held by the upstream project, and forks may not use it; this build therefore carries no
-`HORIZON_MSA_CLIENT_ID`, and its sign-in surfaces say so instead of signing in. The game starts
-offline regardless ([FORK.md](../FORK.md)). The Microsoft sign-in in this fork is only meaningful
-in a build that registers its own Azure app with Mojang (at build time, `HORIZON_MSA_CLIENT_ID`,
-or the same variable at run time); how that works: [docs/microsoft-account.md](../docs/microsoft-account.md).
+This build has no sign-in anywhere: no Microsoft account, no Azure app registration, no token
+store, no `HORIZON_MSA_CLIENT_ID`, at build time or run time. The game always starts offline, with
+the offline player name in each game folder's `horizon-player.txt`. Online-mode (authenticated)
+servers still need a Microsoft account that owns Minecraft: Java Edition, as they do in every
+offline launcher; this fork has no way to sign in to one, and never will ([FORK.md](../FORK.md)).
+The game binary started directly (`horizon-client`, `horizon-ctl launch`), the harnesses and the
+servers don't go through any account check either.
 
 ## Logs and crash reports
 
@@ -509,20 +433,8 @@ The game writes its log to `logs/latest.log` in the game folder (`HORIZON_HOME`,
 `~/.local/share/horizon`, `~/Library/Application Support/horizon` or `%APPDATA%\horizon`), and
 archives the previous one at start as `logs/<date>-<n>.log.gz`, as Minecraft does. When it
 crashes it writes `crash-reports/crash-<date>_<time>-client.txt` beside them. When a game the
-launcher started crashes, the Play page says so, with buttons to open or copy the report, open the
-logs folder and report it on Discord; Settings has the logs folder too. A crash report leaves the
-machine only if you turn on crash reports (below).
-
-## Data collection
-
-The first time it opens, the launcher asks whether you want to send performance statistics,
-crash reports, bug reports and benchmark uploads, each on its own switch and all off until you
-turn one on ("Send nothing" is one click). Settings → Data collection changes them any time, shows
-exactly what would be sent (the JSON), and deletes everything sent from your install. It asks
-again only when what is collected changes. The game obeys the same answer, kept in
-`telemetry/consent.json` in the game folder. What waits is sent when the launcher starts and
-closes. Every field, the caps and the format: [docs/telemetry.md](../docs/telemetry.md).
-
+launcher started crashes, the Play page says so, with buttons to open or copy the report and open
+the logs folder; Settings has the logs folder too. Crash reports never leave the machine.
 
 ## Performance log
 
@@ -534,9 +446,8 @@ and OS (read on a thread after the first frame: on Windows those queries take se
 to an issue about the launcher being slow. `horizon-launcher benchmark` measures on purpose: it starts the launcher `--repeats` times (5; the first start is the cold one, as far
 as the OS's file cache allows), switches pages for a few seconds in each, rests 3 seconds to
 measure idle CPU, fetches the release list 3 times, and writes one report there with means and
-95% confidence intervals. Its window has to be on a screen that is awake. Session logs stay on
-your machine; a `benchmark` report is uploaded, dated to the day, only if you allowed benchmark
-uploads ([data collection](../docs/telemetry.md)).
+95% confidence intervals. Its window has to be on a screen that is awake. Session logs and
+benchmark reports stay on your machine; nothing is uploaded.
 
 Long lists on Mods (results, installed entries, coverage reports and project versions), Versions
 and Patch notes build only nearby rows, including on their first frame. Variable row heights
@@ -551,13 +462,10 @@ On Windows, `cargo test --bin horizon-launcher desktop_list_renders_the_viewport
 On NixOS, `nix-shell` in this folder provides the libraries GPUI links to (Wayland, X11,
 xkbcommon, Vulkan, fontconfig) and the ALSA and libudev files a native mod build looks up, so
 start the launcher from that shell to build native mods as well (#5248). macOS needs Xcode's
-command line tools. The `launcher`
-workflow builds all three platforms on every push to the `launcher` branch (or a
-`launcher-*` one), then installs the latest Horizon into a temporary folder and checks that the
-client starts (`--help`) and that the binaries import only system libraries (Windows).
+command line tools. This fork publishes no builds of its own (FORK.md); upstream's `launcher`
+workflow builds and publishes upstream's launcher releases.
 
-    cargo test --lib    # tag separation, version order, update selection, notes as text,
-                        # the auto-install default, the links fallback
+    cargo test --lib    # tag separation, version order, build housekeeping (prune), notes as text
 
 Geist and Geist Mono (SIL Open Font License, `crates/horizon-theme/fonts/OFL-*.txt`, shared with the game's on-screen keyboard) are
 bundled so the type is the same on every platform.
@@ -569,5 +477,4 @@ bundled so the type is the same on every platform.
 ![Friends over the internet](docs/servers-tailscale.png)
 ![Modpacks](docs/modpacks.png)
 ![Versions](docs/versions.png)
-![Patch notes](docs/patch-notes.png)
 ![Settings](docs/settings.png)

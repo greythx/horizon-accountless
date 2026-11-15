@@ -220,6 +220,8 @@ Microsoft accounts. They appear first in the profile picker, marked **(Microsoft
 connect with their own sessions, skins and secure-chat keys. An account whose session is
 unavailable appears as **(Offline)**: sign in again in the launcher and restart the game to
 use it on an online-mode server. Launcher accounts cannot be forgotten from this page.
+(Upstream only: this fork's launcher signs in to nothing, so there are no Microsoft profiles to
+hand over — [FORK.md](../FORK.md).)
 
 `HORIZON_SPLIT=N` remains a testing shortcut to enable it and add N-1 players.
 The Setup map previews the monitors, windows and player views. Click a player (its name turns
