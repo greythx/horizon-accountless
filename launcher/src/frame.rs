@@ -700,7 +700,8 @@ impl Launcher {
             .child(keyboard(chip, &t))
             .children(self.glass_account_menu(cx));
 
-        // Signing in with Microsoft, while nobody is: the mockup's button.
+        // Signing in with Microsoft, while nobody is: the mockup's button. Optional, for online
+        // play; the game starts without it.
         let sign_in = self.accounts.selected().is_none().then(|| {
             keyboard(
                 div()
@@ -721,7 +722,7 @@ impl Launcher {
                             .child(tr("Sign in with Microsoft")),
                     )
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.start_sign_in();
+                        this.sign_in_to_play();
                         cx.notify();
                     })),
                 &t,

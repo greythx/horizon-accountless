@@ -6,9 +6,10 @@
 //! reads once (`--session-file`), never on its command line. Tokens never reach logs, errors or
 //! output.
 //!
-//! The owner gate ([`launch`]): the launcher starts the game only while an account in it owns
-//! Minecraft: Java Edition, as other launchers do, and the game plays as the selected account.
-//! The game binary itself, its harnesses and the servers don't go through the launcher's gate.
+//! Sign-in is optional: the game starts with or without an account (offline when there is
+//! none). Whether an account owns Minecraft: Java Edition decides only who the launcher may
+//! download Mojang's files for. The game binary itself, its harnesses and the servers don't
+//! go through the launcher's checks.
 //!
 //! The Azure app (client ID) is Horizon's own and is configuration: `HORIZON_MSA_CLIENT_ID` at
 //! build time, or at run time to override it. Without one, sign-in says it is not configured.
@@ -24,8 +25,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 /// The keychain service name every secret is stored under.
 pub const SERVICE: &str = "dev.playhorizon.launcher";
 const SCOPE: &str = "XboxLive.signin offline_access";
-pub const NOT_CONFIGURED: &str = "This build of the launcher has no Microsoft sign-in (HORIZON_MSA_CLIENT_ID), so it can't start the game.";
-/// What every Play says while no account in the launcher owns the game.
+pub const NOT_CONFIGURED: &str = "This build of the launcher has no Microsoft sign-in (HORIZON_MSA_CLIENT_ID) configured.";
+/// What a refusal says while no account in the launcher owns the game (the game starts offline
+/// all the same; this remains for the paths that still report one).
 pub const NEEDS_OWNER: &str =
     "Sign in with a Microsoft account that owns Minecraft: Java Edition to play";
 const DOES_NOT_OWN: &str = "This account doesn't own Minecraft: Java Edition.";
@@ -1865,7 +1867,7 @@ impl Accounts {
         Ok(())
     }
     /// Whether an account here owned the game at its last check (the keychain's answer, no
-    /// request): what Play needs.
+    /// request): what the Mojang download needs.
     pub fn has_owner(&self, store: &dyn SecretStore) -> bool {
         // The selected account first: it owning the game ends the search after one account's
         // item — every account's item read can ask for the keychain (macOS, #4912).
@@ -1903,7 +1905,8 @@ impl Accounts {
     }
 }
 
-/// No account in the launcher owns Minecraft: Java Edition: the game must not start.
+/// Nobody in the launcher owns Minecraft: Java Edition: the Mojang download's gate. The game
+/// itself starts offline regardless.
 #[derive(Debug, Default, PartialEq)]
 pub struct NoOwner {
     /// Why a sign-in couldn't be read, when the keyring didn't give it (#12179), or why the
@@ -1935,7 +1938,7 @@ impl NoOwner {
     }
 }
 
-/// The owner gate's pass for one launch.
+/// What one launch got from the accounts.
 #[derive(Debug, Default)]
 pub struct Launch {
     /// The selected account and its renewed session; none when its sign-in couldn't be renewed
@@ -1959,11 +1962,12 @@ pub fn take_unsaved() -> Option<String> {
     UNSAVED.lock().ok()?.take()
 }
 
-/// The owner gate: the game starts only while an account in the launcher owns Minecraft: Java
-/// Edition. The accounts are asked again, the selected one first, until one owns it; each keeps
-/// the answer in the keychain. An account that gets no answer (no network) keeps its last one, so
-/// being offline never blocks a player who passed before, while "doesn't own" blocks at once.
-/// The caller saves `accounts` (renewed names and skins).
+/// The accounts for one launch, asked about, the selected one first, then the rest: the token
+/// renewal when due, and the ownership answer kept beside it. The selected account's session comes
+/// back when it owns the game (another account's ownership never puts a name of its own on the
+/// command line); whoever owns it is named for the Mojang download. An account that gets no answer
+/// (no network) keeps its last one, and an account that can't be renewed plays offline. The caller
+/// saves `accounts` (renewed names and skins).
 pub fn launch(
     ep: &Endpoints,
     client_id: Option<&str>,
@@ -1974,10 +1978,9 @@ pub fn launch(
     let mut order = accounts.accounts.clone();
     order.sort_by_key(|a| Some(&a.uuid) != selected.as_ref());
     let mut pass = Launch::default();
-    let mut owned = false;
-    let mut unreadable = None;
     for account in order {
-        if owned {
+        // One owner is enough for the Mojang download; the game starts regardless.
+        if pass.owner.is_some() {
             break;
         }
         let plays = Some(&account.uuid) == selected.as_ref();
@@ -1985,17 +1988,16 @@ pub fn launch(
         let read = match store.get(&account.uuid) {
             Ok(text) => text.and_then(|s| serde_json::from_str::<Secrets>(&s).ok()),
             Err(why) => {
-                // Not "signed out": the keyring didn't say (#12179). With no owner, the refusal
-                // says this instead.
+                // Not "signed out": the keyring didn't say (#12179). The game starts offline and
+                // the reason goes to the window.
                 let said = crate::i18n::trf(
                     "Can't read {name}'s sign-in: {why}",
                     &[("name", &account.name), ("why", &why)],
                 );
                 eprintln!("Horizon: {said}");
                 if plays {
-                    pass.offline = Some(said.clone());
+                    pass.offline = Some(said);
                 }
-                unreadable = Some(said);
                 continue;
             }
         };
@@ -2025,7 +2027,6 @@ pub fn launch(
             Check::DoesNot(secrets) => (Some(DOES_NOT_OWN.to_string()), secrets),
             Check::NoAnswer(e, secrets) => (Some(e), secrets),
         };
-        owned = secrets.owns;
         if plays {
             pass.offline = said;
         }
@@ -2047,18 +2048,15 @@ pub fn launch(
             }
         }
     }
-    if owned {
-        Ok(pass)
-    } else {
-        Err(NoOwner {
-            keyring: unreadable,
-        })
-    }
+    // The game starts all the same: an account that can't play it only means there is no session
+    // for it this time (`pass.offline`), and no owner for the Mojang download.
+    Ok(pass)
 }
 
-/// The owner gate before the game starts: [`launch`], where the account that plays (the selected
-/// one, else the first) must own the game itself, by the services' answer or, when they can't be
-/// asked, its last one. Never another account's ownership for a name of its own.
+/// What the game about to start gets from the accounts: the renewed sign-ins and sessions, and
+/// who owns the game (the Mojang download). Never another account's ownership for a name of its
+/// own: the playing account plays with its session, or offline. Best effort: an account whose
+/// sign-in can't be renewed (or none at all) just means an offline launch, never a refusal.
 pub fn launch_for_game(
     ep: &Endpoints,
     client_id: Option<&str>,
@@ -2069,18 +2067,7 @@ pub fn launch_for_game(
         accounts.selected = accounts.accounts.first().map(|a| a.uuid.clone());
     }
     let pass = launch(ep, client_id, store, accounts)?;
-    let owns = accounts
-        .selected()
-        .and_then(|a| secrets_in(store, &a.uuid))
-        .is_some_and(|s| s.owns);
-    if owns {
-        Ok(pass)
-    } else {
-        // Why that account can't play (it doesn't own the game, signed out, an unread keyring).
-        Err(NoOwner {
-            keyring: pass.offline,
-        })
-    }
+    Ok(pass)
 }
 
 /// Write the session for the game, readable by this user only, in a fresh file it deletes
@@ -2315,8 +2302,8 @@ pub struct GameSession {
     pub env: Vec<(&'static str, String)>,
 }
 
-/// The owner gate for the game about to start, then the selected account's session in a file
-/// for it, and the other accounts' for its splitscreen players.
+/// What the game about to start gets from the accounts, the selected one's session in a file for
+/// it, and the other accounts' for its splitscreen players.
 pub fn session_for_game(game_home: &Path) -> Result<GameSession, NoOwner> {
     let mut accounts = Accounts::load();
     let pass = launch_for_game(
@@ -2340,6 +2327,9 @@ pub fn session_for_game(game_home: &Path) -> Result<GameSession, NoOwner> {
 /// plays changes for this launch only, so several games can play as several accounts at once
 /// (#4952). What the services renewed (tokens, names, skins) is still kept; which account
 /// `account select` picked is not touched.
+///
+/// The playing account's sign-in is best effort like [`session_for_game`]: the game starts
+/// offline when it can't be renewed.
 pub fn session_for_game_as(game_home: &Path, who: &str) -> Result<GameSession, String> {
     let mut accounts = Accounts::load();
     let pass = launch_as(
@@ -2364,7 +2354,8 @@ pub fn session_for_game_as(game_home: &Path, who: &str) -> Result<GameSession, S
     Ok(session_file(game_home, pass, env))
 }
 
-/// The owner gate as `who`, on `accounts`, which keeps its choice of player.
+/// One launch as `who`, on `accounts`, which keeps its choice of player. Best effort: the
+/// game starts offline when the account can't be renewed.
 fn launch_as(
     ep: &Endpoints,
     client_id: Option<&str>,
@@ -2380,7 +2371,7 @@ fn launch_as(
     pass
 }
 
-/// The game's session files for a launch that passed the gate.
+/// The game's session files for a launch.
 fn session_file(game_home: &Path, pass: Launch, env: Vec<(&'static str, String)>) -> GameSession {
     let mut out = GameSession {
         env,
@@ -2537,10 +2528,12 @@ fn account_sessions_until(
     )]
 }
 
-/// Who plays the real Minecraft: Java Edition (a Java instance), past the owner gate itself
-/// ([`launch`]): the selected account when it owns the game, else one that does. With no answer
-/// from the services, an account that owned it plays with its last token. Mojang's game takes the
-/// token on its command line, as Mojang's launcher gives it; that command is never logged.
+/// Who plays the real Minecraft: Java Edition (a Java instance), best effort, like the Horizon
+/// game: the selected account's session when it owns the game (or the owner's, or any account's
+/// that still holds one), else a placeholder offline identity: the game starts either way, and
+/// Mojang's session server is what says no to online-mode servers. Downloading the game itself
+/// stays owner-only (`download_for_owner`). Mojang's game takes the token on its command line, as
+/// Mojang's launcher gives it; that command is never logged.
 pub fn java_player() -> Result<crate::java_launch::Player, String> {
     let mut accounts = Accounts::load();
     let player = java_player_with(
@@ -2566,19 +2559,31 @@ fn java_player_with(
         let order = accounts.selected().into_iter().chain(&accounts.accounts);
         order
             .into_iter()
-            .find_map(|a| Some((a.clone(), secrets_in(store, &a.uuid).filter(|s| s.owns)?)))
+            .find_map(|a| Some((a.clone(), secrets_in(store, &a.uuid)?)))
     };
-    let (account, secrets) = pass
+    Ok(pass
         .session
         .or(pass.owner)
         .or_else(kept)
-        .ok_or_else(|| NoOwner::default().to_string())?;
-    Ok(crate::java_launch::Player {
-        name: account.name,
-        uuid: account.uuid,
-        token: secrets.minecraft_token,
-        xuid: secrets.xuid.unwrap_or_default(),
-    })
+        .map(|(account, secrets)| crate::java_launch::Player {
+            name: account.name,
+            uuid: account.uuid,
+            token: secrets.minecraft_token,
+            xuid: secrets.xuid.unwrap_or_default(),
+        })
+        .unwrap_or_else(offline_player))
+}
+
+/// Who plays a Java instance of the game when no Microsoft account is signed in: vanilla's own
+/// offline play, a stable name with a token the session server refuses. The game starts; only
+/// online-mode servers don't.
+fn offline_player() -> crate::java_launch::Player {
+    crate::java_launch::Player {
+        name: "Player".into(),
+        uuid: "00000000-0000-0000-0000-000000000000".into(),
+        token: "0".into(),
+        xuid: String::new(),
+    }
 }
 
 #[cfg(test)]

@@ -7,7 +7,12 @@ impl Launcher {
     pub(super) fn who_plays(&self) -> (String, &'static str) {
         match self.accounts.selected() {
             Some(a) => (a.name.clone(), tr("Microsoft account")),
-            None => (String::new(), tr("Sign in with Microsoft")),
+            None => {
+                (
+                    tr("Playing offline").to_string(),
+                    tr("Online servers need a Microsoft account."),
+                )
+            }
         }
     }
 

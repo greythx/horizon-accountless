@@ -1,8 +1,9 @@
-//! Settings' Account card in the glass look, as the mockup's: who plays now (a big head, the
+//! The Settings' Account card in the glass look, as the mockup's: who plays now (a big head, the
 //! name, how), and the Microsoft card beside it with its white Sign in with Microsoft button.
 //!
 //! Not in the mockup, kept in its patterns: the Microsoft accounts already signed in (in the
 //! Microsoft card, with Play as, Refresh and Sign out), the sign-in's code, progress and problems.
+//! Sign-in is optional and for online play; the game starts without it (offline).
 
 use super::*;
 use crate::glass_ui::{self as ui, white, Tone};
@@ -41,8 +42,8 @@ impl Launcher {
             ),
             None => (
                 None,
-                tr("Sign in with Microsoft").to_string(),
-                (Tone::Off, tr(account::NEEDS_OWNER)),
+                tr("Playing offline").to_string(),
+                (Tone::Off, tr("Online servers need a Microsoft account.")),
             ),
         };
         let head = div()
@@ -104,7 +105,11 @@ impl Launcher {
             || matches!(self.sign_in_state, Some(SignInState::Done(_)));
         let first = !has_accounts && self.sign_in_target.is_none();
         let heading = if first {
-            tr("Play online with your Microsoft account").to_string()
+            if configured {
+                tr("Play online with your Microsoft account").to_string()
+            } else {
+                tr("Microsoft account").to_string()
+            }
         } else {
             title
         };
@@ -147,7 +152,7 @@ impl Launcher {
                     &t,
                 )
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.start_sign_in();
+                    this.sign_in_to_play();
                     cx.notify();
                 }))
                 .into_any_element(),

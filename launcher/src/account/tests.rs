@@ -608,21 +608,20 @@ fn a_renewed_sign_in_the_keychain_refuses_still_plays_and_says_so() {
 }
 
 #[test]
-fn a_no_from_the_services_blocks_at_once() {
+fn a_no_from_the_services_keeps_no_owner() {
     let (_, ep) = mock(|m| m.owns_game = false);
     let store = MemoryStore::default();
     let mut accounts = signed_in(&store, &secrets("mc-token", true));
     assert!(accounts.has_owner(&store));
-    assert_eq!(
-        launch(&ep, Some("test-client"), &store, &mut accounts).unwrap_err(),
-        NoOwner::default()
-    );
+    // The game starts all the same: no session, no owner, offline with the reason.
+    let pass = launch(&ep, Some("test-client"), &store, &mut accounts).unwrap();
+    assert!(pass.session.is_none() && pass.owner.is_none());
+    assert_eq!(pass.offline.as_deref(), Some(DOES_NOT_OWN));
     // The answer is kept beside the tokens: offline now, it still says no.
     assert!(!kept(&store).owns && !accounts.has_owner(&store));
-    assert_eq!(
-        launch(&offline(), Some("test-client"), &store, &mut accounts).unwrap_err(),
-        NoOwner::default()
-    );
+    let pass = launch(&offline(), Some("test-client"), &store, &mut accounts).unwrap();
+    assert!(pass.session.is_none() && pass.owner.is_none());
+    assert!(pass.offline.is_some());
     assert_eq!(
         NoOwner::default().to_string(),
         "Sign in with a Microsoft account that owns Minecraft: Java Edition to play."
@@ -649,9 +648,10 @@ fn no_network_never_blocks_a_past_owner() {
     let mut accounts = signed_in(&store, &stale);
     assert!(launch(&offline(), Some("test-client"), &store, &mut accounts).is_ok());
     assert!(launch(&offline(), None, &store, &mut accounts).is_ok());
-    // An account that never passed doesn't pass offline.
+    // An account that never passed plays offline too; it just has no session.
     let mut accounts = signed_in(&store, &secrets("mc-token", false));
-    assert!(launch(&offline(), Some("test-client"), &store, &mut accounts).is_err());
+    let pass = launch(&offline(), Some("test-client"), &store, &mut accounts).unwrap();
+    assert!(pass.session.is_none() && pass.owner.is_none());
 }
 
 #[test]
@@ -661,7 +661,7 @@ fn accounts_from_before_the_gate_owned_the_game_at_sign_in() {
 }
 
 #[test]
-fn any_owner_opens_the_gate_and_the_one_who_plays_brings_the_session() {
+fn any_owner_can_download_and_the_one_who_plays_brings_the_session() {
     let (m, ep) = mock(|_| {});
     let store = MemoryStore::default();
     let mut accounts = signed_in(&store, &secrets("mc-token", true));
@@ -686,24 +686,27 @@ fn any_owner_opens_the_gate_and_the_one_who_plays_brings_the_session() {
     let pass = launch(&ep, Some("test-client"), &store, &mut accounts).unwrap();
     assert!(pass.session.is_none() && pass.offline.is_none());
     assert_eq!(m.lock().unwrap().log.len(), 2);
-    // No account at all.
-    assert!(launch(&ep, Some("test-client"), &store, &mut Accounts::default()).is_err());
+    // No account at all: offline play, no session, no owner, nothing refused.
+    let pass = launch(&ep, Some("test-client"), &store, &mut Accounts::default()).unwrap();
+    assert!(pass.session.is_none() && pass.owner.is_none() && pass.offline.is_none());
 }
 
 #[test]
-fn the_game_plays_only_as_an_account_that_owns_it() {
+fn the_game_plays_offline_with_or_without_an_account_that_owns_it() {
     let store = MemoryStore::default();
     let (_, ep) = mock(|_| {});
-    // No account: no game.
-    let refused = launch_for_game(&ep, Some("test-client"), &store, &mut Accounts::default());
-    assert_eq!(refused.unwrap_err(), NoOwner::default());
+    // No account: the game starts offline, without a session.
+    let pass =
+        launch_for_game(&ep, Some("test-client"), &store, &mut Accounts::default()).unwrap();
+    assert!(pass.session.is_none() && pass.owner.is_none() && pass.offline.is_none());
     // An owner, none selected: it plays, with its session.
     let mut accounts = signed_in(&store, &secrets("mc-token", true));
     accounts.selected = None;
     let pass = launch_for_game(&ep, Some("test-client"), &store, &mut accounts).unwrap();
     assert_eq!(pass.session.unwrap().0.name, "Notch");
     assert_eq!(accounts.selected.as_deref(), Some(UUID));
-    // Another account plays: Notch owning the game doesn't let it play under a name of its own.
+    // Another account plays: Notch owning the game doesn't let it play under a name of its own,
+    // but the game starts all the same.
     accounts.accounts.push(Account {
         uuid: "other".into(),
         name: "Alex".into(),
@@ -711,15 +714,20 @@ fn the_game_plays_only_as_an_account_that_owns_it() {
         cape: None,
     });
     accounts.play_as("other").unwrap();
-    let refused = launch_for_game(&ep, Some("test-client"), &store, &mut accounts).unwrap_err();
-    assert!(refused
-        .to_string()
+    let pass = launch_for_game(&ep, Some("test-client"), &store, &mut accounts).unwrap();
+    assert!(pass.session.is_none());
+    assert_eq!(pass.owner.unwrap().0.name, "Notch");
+    assert!(pass
+        .offline
+        .unwrap()
         .starts_with("Alex is no longer signed in"));
-    // The services say the account that plays doesn't own the game.
+    // The services say the account that plays doesn't own the game: still Ok, offline, no
+    // session.
     let (_, ep) = mock(|m| m.owns_game = false);
     let mut accounts = signed_in(&store, &secrets("mc-token", true));
-    let refused = launch_for_game(&ep, Some("test-client"), &store, &mut accounts);
-    assert_eq!(refused.unwrap_err(), NoOwner::default());
+    let pass = launch_for_game(&ep, Some("test-client"), &store, &mut accounts).unwrap();
+    assert!(pass.session.is_none() && pass.owner.is_none());
+    assert_eq!(pass.offline.as_deref(), Some(DOES_NOT_OWN));
 }
 
 #[test]
@@ -1183,7 +1191,7 @@ fn play_as_picks_a_signed_in_account() {
 }
 
 #[test]
-fn the_java_edition_plays_as_an_owner_even_offline() {
+fn the_java_edition_starts_with_or_without_an_owner() {
     let (_, ep) = mock(|_| {});
     let store = MemoryStore::default();
     let mut accounts = signed_in(&store, &secrets("mc-token", true));
@@ -1199,11 +1207,27 @@ fn the_java_edition_plays_as_an_owner_even_offline() {
     // No network: the last token of an account that owned the game.
     let player = java_player_with(&offline(), Some("test-client"), &store, &mut accounts).unwrap();
     assert_eq!(player.token, "mc-token");
-    // Never for an account that doesn't own it.
+    // An account that doesn't own it plays offline too, with the token it still has.
     let mut accounts = signed_in(&store, &secrets("mc-token", false));
+    let player = java_player_with(&offline(), Some("test-client"), &store, &mut accounts).unwrap();
     assert_eq!(
-        java_player_with(&offline(), Some("test-client"), &store, &mut accounts).unwrap_err(),
-        NoOwner::default().to_string()
+        (
+            player.name.as_str(),
+            player.uuid.as_str(),
+            player.token.as_str()
+        ),
+        ("Notch", UUID, "mc-token")
+    );
+    // No account at all: the game starts with a stable offline identity.
+    let player =
+        java_player_with(&offline(), Some("test-client"), &store, &mut Accounts::default()).unwrap();
+    assert_eq!(
+        (
+            player.name.as_str(),
+            player.uuid.as_str(),
+            player.token.as_str()
+        ),
+        ("Player", "00000000-0000-0000-0000-000000000000", "0")
     );
 }
 
@@ -1893,20 +1917,18 @@ fn a_keyring_that_never_answers_ends_play_with_what_is_wrong() {
             ));
         });
     }
-    let refused = played
+    let pass = played
         .recv_timeout(Duration::from_secs(10))
         .expect("Play waited on the keyring forever")
-        .unwrap_err();
+        .unwrap();
     assert!(started.elapsed() < Duration::from_secs(5));
     let status = checking.join().unwrap();
     assert_eq!(status.state, session::State::Retry);
-    // Not "sign in with an account that owns Minecraft": the player is signed in.
+    // Not "sign in with an account that owns Minecraft": the player is signed in; the game
+    // starts, offline, and says why.
     let said = format!("Can't read Notch's sign-in: {KEYCHAIN_AWAY}");
-    assert_eq!(refused.keyring.as_deref(), Some(said.as_str()));
-    assert_eq!(
-        (refused.to_string(), refused.in_window()),
-        (said.clone(), said)
-    );
+    assert_eq!(pass.offline.as_deref(), Some(said.as_str()));
+    assert!(pass.session.is_none());
     // The next start asks the keyring again, and says it didn't answer.
     let restarted = Layered::new(
         Box::new(Bounded::new(
@@ -1919,13 +1941,16 @@ fn a_keyring_that_never_answers_ends_play_with_what_is_wrong() {
         FileStore::new(path.clone()),
     );
     let mut accounts = signed_in(&MemoryStore::default(), &secrets("mc-token", true));
-    let refused = launch(&offline(), Some("test-client"), &restarted, &mut accounts).unwrap_err();
+    let pass = launch(&offline(), Some("test-client"), &restarted, &mut accounts).unwrap();
     assert_eq!(
-        refused.keyring,
-        Some(format!(
-            "Can't read Notch's sign-in: {}",
-            keyring_no_answer(SILENT_WAIT)
-        ))
+        pass.offline.as_deref(),
+        Some(
+            format!(
+                "Can't read Notch's sign-in: {}",
+                keyring_no_answer(SILENT_WAIT)
+            )
+            .as_str()
+        )
     );
     drop(held);
     remove_secrets_dir(&path);
@@ -2437,11 +2462,13 @@ fn a_launch_as_another_account_leaves_the_selected_one() {
         skin: None,
         cape: None,
     });
-    // This launch plays as Alex: it is Alex who is told to sign in again (Notch owning the game
-    // doesn't let Alex play), and Notch is still the one `account select` picked.
-    let refused = launch_as(&offline(), Some("test-client"), &store, &mut accounts, alex);
-    assert!(refused
-        .unwrap_err()
+    // This launch plays as Alex, offline: Alex is who plays (Notch owning the game doesn't put a
+    // name of its own on the command line), and Notch is still the one `account select` picked.
+    let pass = launch_as(&offline(), Some("test-client"), &store, &mut accounts, alex).unwrap();
+    assert!(pass.session.is_none());
+    assert!(pass
+        .offline
+        .unwrap()
         .starts_with("Alex is no longer signed in"));
     assert_eq!(accounts.selected.as_deref(), Some(UUID));
     // Notch plays with the last answer while the services can't be reached.

@@ -1,5 +1,10 @@
 # Horizon launcher
 
+> **Unofficial fork.** This is a fork of [horizon-rust/horizon](https://github.com/horizon-rust/horizon),
+> MIT licensed, not affiliated with, endorsed by or connected to the Horizon project or its maintainers.
+> MIT — keep [LICENSE](../LICENSE) (and THIRD_PARTY_NOTICES.md) with all copies. What this fork changes
+> on purpose: [FORK.md](../FORK.md).
+
 A small desktop app that installs Horizon builds, prepares them from your own copy of
 Minecraft, and starts the client or a dedicated server. Built with [GPUI Fast](https://github.com/longbridge/gpui-fast),
 a fork of Zed's UI framework [GPUI](https://www.gpui.rs) that draws unchanged views from the last frame;
@@ -53,8 +58,9 @@ The opening, then Play ([clip](docs/opening.webm)):
   not prepared yet does it all for an owner, as the official launcher does: it prepares from the
   install when there is one, else downloads (with Mojang's Java when no Java 25 is installed), then
   starts the game. With no install on the computer the Play page offers the download alone and the
-  Minecraft folder row says none is needed. Without an owner,
-  the Play page asks to sign in first. `horizon-launcher prepare --download`.
+  Minecraft folder row says none is needed. Without an account that owns the game the Play page
+  still plays, preparing from your own install (offline); only the Mojang download needs an
+  owning account. `horizon-launcher prepare --download`.
 - **Mods**: tabs for Mods, Modpacks, Resource packs, Shader packs and Data packs. Mods, Modpacks,
   Resource packs and Data packs (into the world picked there) search Horizon's own registry, with
   its categories as filters, or Modrinth (CurseForge support is coming soon); Shader packs search
@@ -161,9 +167,9 @@ The opening, then Play ([clip](docs/opening.webm)):
   instance id inside it, so a rename doesn't lose it. `horizon-launcher instance shortcut
   [instance] [--remove]`; `HORIZON_LAUNCHER_DESKTOP` points it at another folder.
 - **Accounts and quick switch**: the top bar's account chip opens a menu of the signed-in
-  Microsoft accounts. Picking one plays as it from the next Play; that account must own the game
-  ([Microsoft accounts](#microsoft-accounts)). There are no offline names: the project decided
-  that Horizon plays only with a Microsoft account that owns Minecraft: Java Edition. The
+  Microsoft accounts, where there are any. Picking one plays as it from the next Play. This build
+  starts the game offline without an account ([FORK.md](../FORK.md)); online servers need an
+  account that owns Minecraft: Java Edition. The
   Console's Share log takes the account names out of the log. `horizon-launcher account select
   <name>`.
 - **Accent and Home background**: on top of Dark, Light or System, Settings > Launcher picks an
@@ -474,14 +480,13 @@ The window, the command line and the MCP server all call the same core, `src/bac
 
 ## Microsoft accounts
 
-The launcher starts the game only while a Microsoft account that owns Minecraft: Java Edition is
-signed in, as other launchers do: without one, Play (Home, instances, `horizon-launcher play`, the
-MCP's `play`) says "Sign in with a Microsoft account that owns Minecraft: Java Edition to play"
-and starts nothing. Settings → Accounts signs in: the launcher shows a code, you enter it at
-microsoft.com/link, and the launcher checks that the account owns the game. It asks again at every
-Play, with the token renewal; with no network the last answer stands, and a "doesn't own" blocks
-at once. The account that plays must own the game itself, and it plays online-mode servers under
-your own name and skin, LAN and offline-mode servers too. The game binary started directly (`horizon-client`,
+This build starts the game without a Microsoft account: offline play, no sign-in required. Online-mode
+(authenticated) servers still need a Microsoft account that owns Minecraft: Java Edition, as they do
+upstream (and as other launchers do), and only an account that owns it can download the game from
+Mojang. In other respects the sign-in flow is the one described upstream: Settings → Accounts signs
+in — the launcher shows a code, you enter it at microsoft.com/link, and the account is checked. The
+game plays as the selected account (else the first); a sign-in that can't be renewed starts the game
+offline anyway. The game binary started directly (`horizon-client`,
 `horizon-ctl launch`), the harnesses and the servers don't go through this check. Tokens live in the system keychain (Keychain,
 Credential Manager, or the Secret Service on Linux), never in a log or the command line;
 `accounts.json` in the data folder keeps only names and UUIDs. On Linux without a keychain they go
@@ -491,9 +496,12 @@ Tailscale access token never goes to that file: without a keychain it lasts unti
 closes. When the game starts, it gets the session in a private file it
 deletes as soon as it has read it. Sign out removes the tokens.
 
-Sign-in needs Horizon's own Azure app registration: its client ID is built in from
-`HORIZON_MSA_CLIENT_ID` (and `HORIZON_MSA_CLIENT_ID` at run time overrides it; empty = not
-configured). How it works: [docs/microsoft-account.md](../docs/microsoft-account.md).
+**This build has no Microsoft sign-in app registration of its own.** Microsoft sign-in is Horizon's
+Azure app, held by the upstream project, and forks may not use it; this build therefore carries no
+`HORIZON_MSA_CLIENT_ID`, and its sign-in surfaces say so instead of signing in. The game starts
+offline regardless ([FORK.md](../FORK.md)). The Microsoft sign-in in this fork is only meaningful
+in a build that registers its own Azure app with Mojang (at build time, `HORIZON_MSA_CLIENT_ID`,
+or the same variable at run time); how that works: [docs/microsoft-account.md](../docs/microsoft-account.md).
 
 ## Logs and crash reports
 

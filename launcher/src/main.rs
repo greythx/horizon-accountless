@@ -120,7 +120,7 @@ enum Page {
 impl Page {
     /// `HORIZON_LAUNCHER_PAGE=mods` (or `modpacks`, `resourcepacks`, `shaders`, `servers`, `versions`,
     /// `settings`) opens on that page, for screenshots; Home otherwise (`getting-ready`: Home
-    /// preparing, `home::getting_ready_preview`; `sign-in`: the owner gate's sheet with a
+    /// preparing, `home::getting_ready_preview`; `sign-in`: the sign-in sheet with a
     /// made-up code, `owner_page::sign_in_preview`; `new-instance`: Home with the New instance
     /// dialog open on Modded; `edit-instance`: the selected one's Edit dialog; `worlds`, `packs`...: Home on that tab, `HomeTab::from_env`).
     fn from_env() -> Page {
@@ -374,10 +374,12 @@ struct Launcher {
     sign_in_state: Option<SignInState>,
     /// What to say when the keychain doesn't keep sign-ins ([`account::no_keychain`]).
     keychain: Option<String>,
-    /// Whether an account here owns the game, by the keychain's last answers (the owner gate);
-    /// none until the keychain has been read.
+    /// Whether an account here owns the game, by the keychain's last answers; none until the
+    /// keychain has been read. Only the Mojang download asks about ownership now; the game starts
+    /// offline all the same.
     owner: Option<bool>,
-    /// Play was refused (or Home's Sign in pressed): the owner gate's screen is open.
+    /// The sign-in sheet (Settings → Account's sign-in button) is open. Explicit user action
+    /// opens it; never Play.
     owner_screen_open: bool,
     /// The game is waiting for its session (a token renewal), or a Java instance for its files
     /// and Java (`start_java`), before it starts.
@@ -1174,9 +1176,6 @@ impl Launcher {
                     self.auth_busy.remove(&uuid);
                     self.auth_progress.remove(&uuid);
                     if self.accounts.find(&uuid).is_some() {
-                        if status.state == account::session::State::Ready {
-                            self.owner = Some(true);
-                        }
                         self.auth_status.insert(uuid, status);
                         // A refresh may have saved a new name or skin: show it now.
                         let saved = Accounts::load();
@@ -1218,13 +1217,9 @@ impl Launcher {
                             self.step_aside(cx);
                         }
                         Err(e) => {
-                            if e == account::NoOwner::default().to_string() {
-                                self.owner = Some(false);
-                                self.owner_screen_open = true;
-                                self.client_error = Some(account::NoOwner::default().in_window());
-                            } else {
-                                self.client_error = Some(e);
-                            }
+                            // Defensive: the accounts are asked best effort and the game always
+                            // starts; only an unread file or a spawn failure lands here.
+                            self.client_error = Some(e);
                         }
                     }
                 }
@@ -1235,11 +1230,8 @@ impl Launcher {
                         let account::GameSession { file, offline, env } = match session {
                             Ok(pass) => pass,
                             Err(refused) => {
-                                // A keyring that didn't answer isn't a missing owner (#12179).
-                                if refused.keyring.is_none() {
-                                    self.owner = Some(false);
-                                    self.owner_screen_open = true;
-                                }
+                                // Defensive: the accounts are asked best effort and the game
+                                // always starts, so this can't happen now. Say it, start nothing.
                                 self.client_error = Some(refused.in_window());
                                 self.starting_pack = None;
                                 self.joining = None;
@@ -1247,7 +1239,6 @@ impl Launcher {
                                 continue;
                             }
                         };
-                        self.owner = Some(true);
                         if let Some(file) = file {
                             cmd.arg("--session-file").arg(file);
                         }
@@ -1590,12 +1581,7 @@ impl Launcher {
                     self.load_auth_statuses(false);
                     // Sign-in refuses accounts that don't own the game.
                     self.owner = Some(true);
-                    self.owner_screen_open = false;
                     self.client_error = None;
-                    if !self.settings.owner_notice_seen {
-                        self.settings.owner_notice_seen = true;
-                        self.save_settings();
-                    }
                 }
                 changed = true;
             }
@@ -2500,10 +2486,10 @@ fn segments<T: Copy + PartialEq + 'static>(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PlayPress {
     Play,
-    /// Not prepared, for an account that owns the game: prepare it (from the player's install,
-    /// else downloaded from Mojang for that account), then play, as the official launcher does.
+    /// Not prepared yet: prepare it (from the player's install, else downloaded from Mojang for an
+    /// owning account), then play, as the official launcher does.
     PrepareThenPlay,
-    /// Not prepared and no owner (signing in comes first), or busy preparing or playing.
+    /// Busy preparing or playing.
     Nothing,
 }
 
@@ -2550,13 +2536,12 @@ fn sign_in_change(shown: &mut Option<SignInState>, next: SignInState) -> Option<
     Some(next)
 }
 
-/// `owner`: whether an account here owns the game, by the keychain (`Launcher::owner`).
-fn play_press(prepared: bool, owner: Option<bool>, busy: bool) -> PlayPress {
-    match (prepared, owner) {
-        _ if busy => PlayPress::Nothing,
-        (true, _) => PlayPress::Play,
-        (false, Some(true)) => PlayPress::PrepareThenPlay,
-        (false, _) => PlayPress::Nothing,
+/// `Play`: anyone plays, signed in or not (the game starts offline without an account).
+fn play_press(prepared: bool, busy: bool) -> PlayPress {
+    match (prepared, busy) {
+        (_, true) => PlayPress::Nothing,
+        (true, false) => PlayPress::Play,
+        (false, false) => PlayPress::PrepareThenPlay,
     }
 }
 
@@ -2564,7 +2549,7 @@ fn play_press(prepared: bool, owner: Option<bool>, busy: bool) -> PlayPress {
 /// code, a pack's Play) starts it now: only when Play would play. Never while a preparation runs:
 /// the game would open on half-written files.
 fn starts_now(prepared: bool, preparing: bool, running: bool) -> bool {
-    play_press(prepared, None, preparing || running) == PlayPress::Play
+    play_press(prepared, preparing || running) == PlayPress::Play
 }
 
 /// Whether `tag` can start being deleted now: it is installed, no install is writing it, and it
@@ -3387,11 +3372,9 @@ impl Launcher {
         let left = self.download_left();
         let steps = self.preparing.then(|| self.steps(&version, left));
 
-        // Not prepared: an owner can have Horizon download Minecraft from Mojang; without an
-        // owner there is nothing to play, so signing in comes first.
-        let first = (!prepared && !self.preparing)
-            .then_some(self.owner)
-            .flatten();
+        // Not prepared: an owner can also have Horizon download Minecraft from Mojang; everyone
+        // prepares from their own install either way.
+        let first = (!prepared && !self.preparing).then_some(self.owner == Some(true));
         // No launcher folder with Minecraft on this computer: an owner needs none.
         let no_install = self.settings.minecraft_dir.is_none();
         let resources_value = match first {
@@ -3404,11 +3387,7 @@ impl Launcher {
                 "Not prepared. Horizon can download Minecraft {version} from Mojang for your account, or use your own install.",
                 &[("version", &version)],
             ),
-            Some(false) => trf(
-                "Not prepared. Sign in with the Microsoft account that owns Minecraft {version} first.",
-                &[("version", &version)],
-            ),
-            None => backend::resources_summary(prepared, !silent, &version),
+            _ => backend::resources_summary(prepared, !silent, &version),
         };
         let mut prepare = button(
             "prepare",
@@ -3464,13 +3443,9 @@ impl Launcher {
                         cx.notify();
                     })),
                 ),
-            Some(false) => div().child(microsoft::sign_in_button("prepare-sign-in", &t).on_click(
-                cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.sign_in_to_play();
-                    cx.notify();
-                }),
-            )),
-            None => div().child(prepare),
+            // Everyone prepares from their own install; only an owner can have the files from
+            // Mojang instead (Mojang's requirement, kept in `download_for_owner`).
+            _ => div().child(prepare),
         };
         let owner = self.owner == Some(true);
         let minecraft = self.settings.minecraft_dir.as_deref().map_or_else(
@@ -3537,38 +3512,22 @@ impl Launcher {
                 &t,
             )),
         };
-        // The top bar shows who plays; a row only when there is something to do about it: no
-        // account that owns the game (Play needs one), or offline. The glass look's top bar has
-        // Sign in with Microsoft and says Offline itself.
+        // The top bar shows who plays; the row says how this build launches. The glass look's
+        // top bar has its own account chip.
         if !t.glass {
-            if self.owner == Some(false) {
+            if let Some(a) = self.accounts.selected() {
                 rows = rows.child(index_row(
                     5,
                     tr("Microsoft account"),
-                    Some(
-                        div()
-                            .child(format!("{}.", tr(account::NEEDS_OWNER)))
-                            .into_any_element(),
-                    ),
-                    Some(
-                        microsoft::sign_in_button("gate-sign-in", &t)
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.sign_in_to_play();
-                                cx.notify();
-                            }))
-                            .into_any_element(),
-                    ),
+                    Some(div().child(a.name.clone()).into_any_element()),
+                    None,
                     &t,
                 ));
-            } else if self.accounts.selected().is_none() && account::client_id().is_some() {
+            } else {
                 rows = rows.child(index_row(
                     5,
                     tr("Playing offline"),
-                    Some(
-                        div()
-                            .child(tr("Online servers need a Microsoft account."))
-                            .into_any_element(),
-                    ),
+                    Some(div().child(tr(account::NOT_CONFIGURED)).into_any_element()),
                     Some(
                         button("accounts", "Accounts…", Kind::Ghost, &t)
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
@@ -4418,23 +4377,11 @@ impl Launcher {
         let mut n = 0;
         let selected = self.accounts.selected.clone();
         for (i, a) in self.accounts.accounts.clone().into_iter().enumerate() {
-            let plays = selected.as_ref() == Some(&a.uuid);
             let uuid = a.uuid.clone();
             let mut actions = div().flex().gap(px(4.));
-            if plays {
-                actions = actions.child(
-                    button(format!("offline-{i}"), "Play offline", Kind::Ghost, &t).on_click(
-                        cx.listener(|this, _: &ClickEvent, _, cx| {
-                            let mut accounts = Accounts::load();
-                            accounts.selected = None;
-                            if accounts.save().is_ok() {
-                                this.accounts = accounts;
-                            }
-                            cx.notify();
-                        }),
-                    ),
-                );
-            } else {
+            // The selected account plays; the others play with Play as. The game starts
+            // offline either way.
+            if selected.as_ref() != Some(&a.uuid) {
                 let uuid = uuid.clone();
                 actions = actions.child(
                     button(format!("select-{i}"), "Play as", Kind::Secondary, &t).on_click(
@@ -4517,7 +4464,7 @@ impl Launcher {
                 a.name.clone(),
                 Some(
                     div()
-                        .child(tr(if plays {
+                        .child(tr(if selected.as_ref() == Some(&a.uuid) {
                             "Microsoft account · plays"
                         } else {
                             "Microsoft account"
@@ -4584,7 +4531,7 @@ impl Launcher {
             }
             Some(SignInState::Done(Err(e))) => div().text_color(t.danger).child(e.clone()),
             None if self.accounts.accounts.is_empty() => div().child(tr(
-                "Horizon needs a Microsoft account that owns Minecraft: Java Edition, like other launchers. It also plays online servers with your name and skin.",
+                "Online servers need a Microsoft account that owns Minecraft: Java Edition.",
             )),
             None => div().child(tr("Add another account.")),
         };
@@ -4683,7 +4630,8 @@ impl Launcher {
                     if let Some(uuid) = &target {
                         this.re_sign_in(uuid);
                     } else {
-                        this.start_sign_in();
+                        // The optional sign-in opens the sheet, never anything else.
+                        this.sign_in_to_play();
                     }
                     cx.notify();
                 },
@@ -5499,7 +5447,7 @@ impl Render for Launcher {
         if self.asking_consent() {
             root = root.child(self.consent_screen(cx));
         }
-        if self.asking_owner() {
+        if self.owner_screen_open {
             root = root.child(self.owner_screen(cx));
         }
         if let Some(opening) = &self.opening {
@@ -5897,22 +5845,15 @@ mod tests {
         );
     }
 
-    /// An owner's Play works on a version not prepared yet: it prepares it (downloading
-    /// Minecraft from Mojang when this computer has no install), then plays. Without an owner
-    /// it stays off: signing in comes first.
+    /// Play works on a version not prepared yet: it prepares it (from the player's install, else
+    /// from Mojang for an owning account), then plays. No account is needed for any of it.
     #[test]
-    fn play_prepares_first_for_an_owner() {
+    fn play_prepares_first_for_everyone() {
         use super::{play_press, PlayPress};
-        assert_eq!(play_press(true, Some(true), false), PlayPress::Play);
-        assert_eq!(play_press(true, None, false), PlayPress::Play);
-        assert_eq!(
-            play_press(false, Some(true), false),
-            PlayPress::PrepareThenPlay
-        );
-        assert_eq!(play_press(false, Some(false), false), PlayPress::Nothing);
-        assert_eq!(play_press(false, None, false), PlayPress::Nothing);
-        assert_eq!(play_press(false, Some(true), true), PlayPress::Nothing);
-        assert_eq!(play_press(true, Some(true), true), PlayPress::Nothing);
+        assert_eq!(play_press(true, false), PlayPress::Play);
+        assert_eq!(play_press(false, false), PlayPress::PrepareThenPlay);
+        assert_eq!(play_press(false, true), PlayPress::Nothing);
+        assert_eq!(play_press(true, true), PlayPress::Nothing);
     }
 
     /// A server's Join (and every other shortcut) waits like Play: not while the version's

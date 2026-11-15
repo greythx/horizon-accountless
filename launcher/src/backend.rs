@@ -2245,7 +2245,7 @@ pub fn java_game(
     )
 }
 
-/// What [`download_for_owner`] does with the owner gate's answer: Mojang's files only for its
+/// What [`download_for_owner`] does with the launch's pass: Mojang's files only for its
 /// `owner`, an account the services said owns the game just now.
 fn download_for(
     pins: &sources::Pins,
@@ -3163,9 +3163,9 @@ pub fn play_step(step: &str) {
     eprintln!("Horizon: Play: {step}…");
 }
 
-/// The client's command, once the owner gate lets it start and its resources are prepared. Past
-/// the gate, a sign-in that can't be renewed (no network, expired) still lets the game start,
-/// offline.
+/// The client's command, once its resources are prepared. The game starts offline when there is
+/// no account that can play it; a sign-in that can't be renewed (no network, expired) still lets
+/// the game start, offline.
 pub fn client(tag: &str) -> Result<Command, String> {
     client_as(tag, None)
 }
@@ -4222,15 +4222,16 @@ pub enum Msg {
     /// None when secrets are kept in the OS keychain, else what to say: they last only until
     /// the launcher closes, and why.
     Keychain(Option<String>),
-    /// Whether an account in the launcher owned the game at its last check (the owner gate).
+    /// Whether an account in the launcher owned the game at its last check (the Mojang
+    /// download's gate).
     Owner(bool),
     /// Credential-free result from a background account operation.
     AccountStatus(String, u64, crate::account::session::Status),
     AccountProgress(String, u64, crate::account::session::Phase),
     AccountHead(String, Option<String>, Option<Vec<[u8; 4]>>, bool),
     AccountRemoved(String, u64, Result<bool, String>),
-    /// The owner gate's answer for the game about to start: the selected account's session
-    /// file (none = offline) and why it plays offline, if it does.
+    /// The accounts' answer for the game about to start: the selected account's session file
+    /// (none = offline) and why it plays offline, if it does.
     Session(Result<crate::account::GameSession, crate::account::NoOwner>),
     /// A modpack step's line (`modpacks`).
     PackLine(String),
@@ -4452,8 +4453,7 @@ pub struct Settings {
     /// first-run question, or on the Play page once if they answered that before it existed.
     #[serde(default)]
     pub ping_notice_seen: bool,
-    /// The player without an account that owns the game has read, once, why the launcher needs
-    /// one now (the owner gate's screen).
+    /// The player has read what the sign-in sheet says, once (it says nothing the game needs).
     #[serde(default)]
     pub owner_notice_seen: bool,
     /// Seconds a partner banner (the sidebar's card or the Servers page's banner) has been on

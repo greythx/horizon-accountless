@@ -1,26 +1,18 @@
-//! The owner gate in the window (`horizon_launcher::account::launch`): the screen that asks for a
-//! Microsoft account that owns Minecraft: Java Edition. It covers the launcher once for players
-//! without one (those who played offline before the gate), and again whenever Play is refused.
-//! The sign-in runs on it, code and all.
+//! The sign-in sheet (`horizon_launcher::account::launch`): a full-screen sign-in with a code,
+//! for the fork's optional Microsoft sign-in. Explicit user action opens it (the Settings →
+//! Account sign-in button); Play never does, and the game starts regardless. The sign-in runs
+//! on it, code and all.
 use super::*;
 
 impl Launcher {
-    /// Whether the screen covers the window: no owner, and either Play was refused or the player
-    /// hasn't read it yet. The data question comes first.
-    pub(crate) fn asking_owner(&self) -> bool {
-        (self.owner == Some(false) || sign_in_preview())
-            && (self.owner_screen_open || !self.settings.owner_notice_seen || sign_in_preview())
-            && !self.asking_consent()
-            && self.opening.is_none()
-    }
-
-    /// Opens the screen and starts the sign-in on it.
+    /// Opens the sign-in sheet and starts the sign-in on it. Only explicit user action opens
+    /// it: the Settings → Account sign-in button (the fork's optional sign-in UI), never Play.
     pub(crate) fn sign_in_to_play(&mut self) {
         self.owner_screen_open = true;
         self.start_sign_in();
     }
 
-    /// Closes it; it comes back with the next refused Play.
+    /// Close it; the sign-in stays what it was.
     fn close_owner_screen(&mut self) {
         self.cancel_sign_in();
         self.owner_screen_open = false;
@@ -65,14 +57,14 @@ impl Launcher {
             .child(
                 shell::text(theme::night::TITLE, shell::c(n.ink))
                     .mb(px(4.))
-                    .child(tr("Sign in to play").to_string()),
+                    .child(tr("Sign in for online play").to_string()),
             )
             .child(line(
-                "Horizon needs a Microsoft account that owns Minecraft: Java Edition, like other launchers.",
+                "Online servers need a Microsoft account that owns Minecraft: Java Edition.",
                 n.ink_soft,
             ))
             .child(line(
-                "No Minecraft install needed: Horizon downloads it from Mojang for your account.",
+                "Minecraft comes from your own install, or from Mojang for an account that owns it.",
                 n.ink_soft,
             ));
         let raised = || {
@@ -299,7 +291,7 @@ impl Launcher {
                     .text_size(px(28.))
                     .line_height(px(35.))
                     .text_color(white(ink::FULL))
-                    .child(tr("Sign in to play")),
+                    .child(tr("Sign in for online play")),
             )
             .child(
                 div()
@@ -308,10 +300,10 @@ impl Launcher {
                     .flex_col()
                     .gap(px(8.))
                     .child(ui::text(14., FontWeight::NORMAL, ink::BODY).child(tr(
-                        "Horizon needs a Microsoft account that owns Minecraft: Java Edition, like other launchers.",
+                        "Online servers need a Microsoft account that owns Minecraft: Java Edition.",
                     )))
                     .child(ui::text(14., FontWeight::NORMAL, ink::BODY).child(tr(
-                        "No Minecraft install needed: Horizon downloads it from Mojang for your account.",
+                        "Minecraft comes from your own install, or from Mojang for an account that owns it.",
 ))),
             );
         card = match state {
@@ -522,7 +514,7 @@ enum Shown<'a> {
 }
 
 /// `HORIZON_LAUNCHER_PAGE=sign-in` opens the sheet with a made-up code, for screenshots: nothing
-/// asks Microsoft, and the gate itself is as it was (no account, no Play).
+/// asks Microsoft; Play starts regardless of any sheet.
 pub(super) fn sign_in_preview() -> bool {
     static PREVIEW: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *PREVIEW.get_or_init(|| std::env::var("HORIZON_LAUNCHER_PAGE").as_deref() == Ok("sign-in"))
