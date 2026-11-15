@@ -6,6 +6,9 @@ use std::process::Command;
 pub fn command(program: impl AsRef<OsStr>) -> Command {
     let mut command = Command::new(program);
     hide_console(&mut command);
+    // This fork never phones home: children must not send the heartbeat ping or telemetry.
+    command.env("HORIZON_NO_HEARTBEAT", "1");
+    command.env("HORIZON_TELEMETRY_URL", "off");
     command
 }
 

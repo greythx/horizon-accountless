@@ -2637,6 +2637,9 @@ pub fn client_command(tag: &str) -> Command {
         .env_remove("HORIZON_ACCOUNT_SESSIONS")
         .arg("--resources")
         .arg(resources(tag));
+    // This fork never phones home: the game must not send the heartbeat ping or telemetry.
+    cmd.env("HORIZON_NO_HEARTBEAT", "1")
+        .env("HORIZON_TELEMETRY_URL", "off");
     // Where the launcher's executable is, for anything the game might start from it (the game
     // reads it to find agent tooling). Harmless when unused.
     if let Ok(exe) = std::env::current_exe() {
@@ -2668,6 +2671,9 @@ fn client_program(tag: &str) -> PathBuf {
 
 pub fn server_command(tag: &str, folder: &Path) -> Command {
     let mut cmd = Command::new(version_dir(tag).join(CLIENT));
+    // This fork never phones home: the game must not send the heartbeat ping or telemetry.
+    cmd.env("HORIZON_NO_HEARTBEAT", "1")
+        .env("HORIZON_TELEMETRY_URL", "off");
     cmd.current_dir(folder)
         .arg("--resources")
         .arg(resources(tag))
@@ -4100,6 +4106,20 @@ mod tests {
                 "nightly-build.yml must sign and publish {game} ({os} {arch})"
             );
         }
+    }
+
+    #[test]
+    fn the_game_is_told_not_to_phone_home() {
+        let cmd = client_command("v2026.10.13");
+        let envs = cmd.get_envs().collect::<std::collections::HashMap<_, _>>();
+        assert_eq!(
+            envs.get(OsStr::new("HORIZON_NO_HEARTBEAT")),
+            Some(&Some(OsStr::new("1")))
+        );
+        assert_eq!(
+            envs.get(OsStr::new("HORIZON_TELEMETRY_URL")),
+            Some(&Some(OsStr::new("off")))
+        );
     }
 
     #[test]
