@@ -41,10 +41,7 @@ pub const DESTRUCTIVE: &[&str] = &[
 ];
 
 /// Commands that send something or reach other people: only when the player asks.
-pub const OPEN_WORLD: &[&str] = &[
-    "servers create",
-    "share-log",
-];
+pub const OPEN_WORLD: &[&str] = &["servers create", "share-log"];
 
 /// A generated tool: its name, the CLI words it runs and the clap command behind them.
 pub struct Tool {
@@ -384,12 +381,7 @@ mod tests {
         ] {
             assert!(names.iter().any(|n| n == want), "{want} missing: {names:?}");
         }
-        for not in [
-            "mcp",
-            "no_ai",
-            "play",
-            "server",
-        ] {
+        for not in ["mcp", "no_ai", "play", "server"] {
             assert!(!names.iter().any(|n| n == not), "{not}");
         }
     }

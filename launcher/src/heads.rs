@@ -101,5 +101,4 @@ mod tests {
         assert_eq!(face[0], [1, 2, 3, 255]);
         assert_eq!(face[1], [7, 8, 9, 255]);
     }
-
 }

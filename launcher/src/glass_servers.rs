@@ -770,7 +770,6 @@ impl Launcher {
                 d.child(self.internet_invites(port_of(self), cx).relative())
             })
     }
-
 }
 
 /// The open server's port.

@@ -136,10 +136,9 @@ impl Page {
 
     /// The pages the top bar shows: all but Settings.
     fn in_top_bar() -> impl Iterator<Item = (Page, &'static str, &'static str)> {
-        Self::ALL.into_iter().filter(move |(page, ..)| match page {
-            Page::Settings => false,
-            _ => true,
-        })
+        Self::ALL
+            .into_iter()
+            .filter(|(page, ..)| !matches!(page, Page::Settings))
     }
 }
 
@@ -864,7 +863,7 @@ impl Launcher {
                 Msg::Reused(_) => self.installed = backend::installed(),
                 Msg::JavaGame(id, home, cmd) => {
                     self.starting_client = None;
-                    let spawned = cmd.and_then(|(cmd, vars)| {
+                    let spawned = (*cmd).and_then(|(cmd, vars)| {
                         self.client_vars = vars;
                         backend::spawn(Job::Client, cmd, self.tx.clone())
                     });
@@ -1414,7 +1413,7 @@ impl Launcher {
                 cmd.envs(vars.iter().map(|(k, v)| (k, v)));
                 (horizon_launcher::launch::wrap(cmd, &instance.launch), vars)
             });
-            let _ = tx.send(Msg::JavaGame(instance.id, instance.home, cmd));
+            let _ = tx.send(Msg::JavaGame(instance.id, instance.home, Box::new(cmd)));
         });
     }
 
@@ -2542,7 +2541,9 @@ impl Launcher {
         let minecraft = self.settings.minecraft_dir.as_deref().map_or_else(
             || {
                 div()
-                    .child(tr("Not found. Choose the folder where your launcher keeps Minecraft."))
+                    .child(tr(
+                        "Not found. Choose the folder where your launcher keeps Minecraft.",
+                    ))
                     .into_any_element()
             },
             |p| {
@@ -2666,24 +2667,19 @@ impl Launcher {
                 .overflow_hidden()
                 .children(picture.into_iter().flatten())
                 .child(
-                    div()
-                        .relative()
-                        .flex()
-                        .items_end()
-                        .gap(px(32.))
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .flex()
-                                .flex_col()
-                                .gap(px(28.))
-                                .child(hero)
-                                .child(actions)
-                                // The preparation's steps right under Play, where the player looks
-                                // after pressing it, not below the fold (#666).
-                                .children(steps),
-                        ),
+                    div().relative().flex().items_end().gap(px(32.)).child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(28.))
+                            .child(hero)
+                            .child(actions)
+                            // The preparation's steps right under Play, where the player looks
+                            // after pressing it, not below the fold (#666).
+                            .children(steps),
+                    ),
                 )
         };
         let mut page = div().flex().flex_col().gap(px(28.)).child(banner);
@@ -3214,11 +3210,9 @@ impl Launcher {
         ) {
             (false, Some(why)) => div().text_color(t.danger).child(why).into_any_element(),
             _ => div()
-                .child(tr(
-                    "Downloads go through this proxy (http://host:port, \
+                .child(tr("Downloads go through this proxy (http://host:port, \
                      socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the \
-                     launcher was started with one.",
-                ))
+                     launcher was started with one."))
                 .into_any_element(),
         };
         if glass_ui::flat() {

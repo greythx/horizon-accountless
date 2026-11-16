@@ -540,9 +540,7 @@ pub fn nightly_version_of(release: &Release) -> String {
 
 /// The date of a nightly's version (`nightly-2026-10-28-0c02067`), or None for any other version.
 pub fn nightly_date_of(version: &str) -> Option<&str> {
-    let date = version
-        .strip_prefix("nightly-")?
-        .get(..10)?;
+    let date = version.strip_prefix("nightly-")?.get(..10)?;
     is_nightly_date(date).then_some(date)
 }
 
@@ -3230,7 +3228,7 @@ pub enum Msg {
     JavaGame(
         String,
         PathBuf,
-        Result<(Command, crate::launch::Vars), String>,
+        Box<Result<(Command, crate::launch::Vars), String>>,
     ),
 }
 
@@ -5277,13 +5275,18 @@ mod tests {
         );
         assert_eq!(
             appimage_path_in(
-                Some(base.join("nonexistent").join("Horizon.AppImage").as_os_str()),
+                Some(
+                    base.join("nonexistent")
+                        .join("Horizon.AppImage")
+                        .as_os_str()
+                ),
                 Some(mount),
                 &exe
             ),
             None
         );
-        let file = std::env::temp_dir().join(format!("horizon-appimage-file-{}", std::process::id()));
+        let file =
+            std::env::temp_dir().join(format!("horizon-appimage-file-{}", std::process::id()));
         std::fs::write(&file, b"#!AppImage").unwrap();
         assert_eq!(
             appimage_path_in(Some(file.as_os_str()), Some(mount), &exe),

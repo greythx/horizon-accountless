@@ -101,20 +101,15 @@ impl Launcher {
                 .children(self.folder_group(java.is_none(), cx))
                 .child(div().flex_1().min_w(px(22.)))
         } else {
-            div()
-                .mt(px(32.))
-                .flex()
-                .flex_col()
-                .gap(px(12.))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(10.))
-                        .child(self.play_group(tag, prepared || java.is_some(), cx))
-                        .children(java.is_none().then(|| self.glass_picker(cx)))
-                        .children(self.folder_group(java.is_none(), cx)),
-                )
+            div().mt(px(32.)).flex().flex_col().gap(px(12.)).child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(self.play_group(tag, prepared || java.is_some(), cx))
+                    .children(java.is_none().then(|| self.glass_picker(cx)))
+                    .children(self.folder_group(java.is_none(), cx)),
+            )
         };
         div()
             .flex()
@@ -389,13 +384,11 @@ impl Launcher {
                 let press = play_press(ready, false);
                 let main = body(tr("Play").into(), "play").id("play").cursor_pointer();
                 let main = match press {
-                    PlayPress::Play => {
-                        main.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.picker.open = false;
-                            this.play();
-                            cx.notify();
-                        }))
-                    }
+                    PlayPress::Play => main.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.picker.open = false;
+                        this.play();
+                        cx.notify();
+                    })),
                     PlayPress::PrepareThenPlay => {
                         main.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                             this.picker.open = false;
@@ -919,5 +912,4 @@ mod tests {
         assert_eq!(since(m(30 * 60), 1, "2026-11-02"), "yesterday");
         assert_eq!(since(m(3 * 24 * 60), 3, "2026-10-31"), "Oct 31");
     }
-
 }

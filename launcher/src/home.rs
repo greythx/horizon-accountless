@@ -8,12 +8,7 @@ use theme::night;
 impl Launcher {
     /// The focal point: what will start and its state, the instance's name, when it was played.
     /// No `tag`: a Java instance's Minecraft (`game` then names its loader too).
-    pub(super) fn hero(
-        &mut self,
-        tag: &str,
-        game: &str,
-        prepared: bool,
-    ) -> Div {
+    pub(super) fn hero(&mut self, tag: &str, game: &str, prepared: bool) -> Div {
         let t = self.theme;
         let n = t.night;
         let icon = self
@@ -57,7 +52,7 @@ impl Launcher {
                     .child(what.join(" · ")),
             );
         // Never squeezed by the rows below.
-        let hero = div()
+        div()
             .flex()
             .flex_none()
             .flex_col()
@@ -78,8 +73,7 @@ impl Launcher {
             )
             .children(instance.map(|i| {
                 shell::text(night::UI, c(n.ink_soft)).child(instances_page::played_line(i))
-            }));
-        hero
+            }))
     }
 
     /// Play, then what else the instance offers: its version (Horizon), its mods, its folder.
@@ -171,7 +165,6 @@ impl Launcher {
                     })
             }))
     }
-
 }
 
 impl Launcher {

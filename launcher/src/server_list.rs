@@ -156,7 +156,6 @@ impl List {
             .and_then(|()| fs::rename(&new, &current));
         written.map_err(|e| format!("Could not save the server list: {e}"))
     }
-
 }
 
 /// The shown server a command names: its position from 1, its name (any case) or its address.

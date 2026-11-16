@@ -119,7 +119,9 @@ fn write(path: &Path, entries: &std::collections::BTreeMap<String, String>) -> R
 
 /// The secret for `key`, or `None` when there is none.
 pub fn get(key: &str) -> Result<Option<String>, String> {
-    locked(|path| read(path).map(|entries| entries.into_iter().find(|(k, _)| k == key).map(|(_, v)| v)))
+    locked(|path| {
+        read(path).map(|entries| entries.into_iter().find(|(k, _)| k == key).map(|(_, v)| v))
+    })
 }
 
 /// Keeps `secret` for `key`.

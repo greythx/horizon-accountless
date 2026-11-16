@@ -105,7 +105,9 @@ impl Launcher {
         std::thread::spawn(move || {
             let _ = tx.send(Event::State(tailscale::status()));
             if want_token {
-                let token = horizon_launcher::secrets_file::get(tailscale::TOKEN_KEY).ok().flatten();
+                let token = horizon_launcher::secrets_file::get(tailscale::TOKEN_KEY)
+                    .ok()
+                    .flatten();
                 let _ = tx.send(Event::Token(token));
             }
         });
@@ -175,7 +177,9 @@ impl Launcher {
         }
         self.servers.text(Field::Token).set(String::new());
         self.internet.asking_token = false;
-        self.internet.message = horizon_launcher::secrets_file::set(tailscale::TOKEN_KEY, &token).err().map(Err);
+        self.internet.message = horizon_launcher::secrets_file::set(tailscale::TOKEN_KEY, &token)
+            .err()
+            .map(Err);
         self.internet.token = Some(Some(token));
         self.internet_load();
     }

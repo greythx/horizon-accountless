@@ -115,6 +115,7 @@ pub fn java_runtime(
     fetch_all(&downloads, jobs, fetch, cancel, log)?;
     #[cfg(unix)]
     {
+        use std::fs;
         use std::os::unix::fs::PermissionsExt;
         for path in &executables {
             fs::set_permissions(path, fs::Permissions::from_mode(0o755))

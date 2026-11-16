@@ -66,7 +66,11 @@ impl Fixture {
             build: temp.0.join("source").join(build),
         };
         for (root, name, bytes) in [
-            (&source.launcher, "settings.json", &b"{\"skip_opening\":true}"[..]),
+            (
+                &source.launcher,
+                "settings.json",
+                &b"{\"skip_opening\":true}"[..],
+            ),
             (
                 &source.game,
                 "saves/dummy/level.dat",
