@@ -393,6 +393,8 @@ impl Launcher {
                         main.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                             this.picker.open = false;
                             this.play_when_prepared = this.selected().cloned();
+                            this.starting_instance =
+                                this.selected_instance().map(|i| i.id.clone());
                             this.prepare();
                             cx.notify();
                         }))

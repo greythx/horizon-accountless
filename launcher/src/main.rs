@@ -625,6 +625,7 @@ impl Launcher {
         if home::getting_ready_preview() {
             this.preparing = true;
             this.play_when_prepared = this.selected().cloned();
+            this.starting_instance = this.selected_instance().map(|i| i.id.clone());
         }
         // `HORIZON_LAUNCHER_PAGE=new-instance`: the dialog open on Modded, for screenshots
         // (`new-instance-horizon`, `new-instance-vanilla`: on those).
@@ -1361,6 +1362,7 @@ impl Launcher {
     }
 
     fn play(&mut self) {
+        self.starting_instance = self.selected_instance().map(|i| i.id.clone());
         let java = self
             .selected_instance()
             .filter(|i| i.java.is_some())
@@ -1462,7 +1464,6 @@ impl Launcher {
         // What the resources lack (built-in packs, panorama, sounds) comes first; `drain`
         // starts the game when it arrives.
         self.starting_client = Some(tag.clone());
-        self.starting_instance = self.selected_instance().map(|i| i.id.clone());
         self.play_pressed = Some(Instant::now());
         let tx = self.tx.clone();
         // Registry mods update before the game reads them (`horizon::auto`); native mods only
