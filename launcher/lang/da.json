@@ -1009,6 +1009,6 @@
   "Downloading Minecraft's Java from Mojang · {done} of {total} files": "Downloading Minecraft's Java from Mojang · {done} of {total} files",
   "Downloads go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Downloads go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.",
   "Settings, Keys, Generate access token. It's kept in the launcher's data folder, readable only by you, and only sent to Tailscale.": "Settings, Keys, Generate access token. It's kept in the launcher's data folder, readable only by you, and only sent to Tailscale.",
-  "Close the game and servers, and wait for downloads, builds and imports to finish before moving data.": "Close the game and servers, and wait for downloads, builds and imports to finish before moving data.",
+  "Close the game and servers, and wait for downloads, builds and imports to finish before moving data.": "Luk spillet og serverne, og vent på at downloads, builds og import er færdige, før du flytter data.",
   "Listed names are not checked against accounts. Anyone who can reach the server can join with one.": "De angivne navne kontrolleres ikke mod konti. Enhver, der kan nå serveren, kan tilslutte sig med et af dem."
 }

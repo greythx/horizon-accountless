@@ -830,8 +830,13 @@ impl Launcher {
         self.servers.restart_needed.clear();
         self.server_job("Starting", move |log| {
             // A server registered before this build may still carry online mode; this fork hosts
-            // offline servers only. Best effort; the setting applies at the next start.
-            let _ = servers::run(&dir, &["config", "set", "server.online_mode=false"]);
+            // offline servers only. A start that can't make sure of that is refused, not done.
+            if let Err(p) = servers::run(&dir, &["config", "set", "server.online_mode=false"]) {
+                return Err(Problem::plain(format!(
+                    "Could not set the server to offline account checks: {}. Not starting it.",
+                    p.message
+                )));
+            }
             if let Some(api) = servers::Api::open(&dir) {
                 if let Ok(status) = api.call("GET", "/api/v1/status", None) {
                     if status["phase"] == "stopped"
