@@ -515,6 +515,12 @@ impl Launcher {
                 ))
                 .mt(px(10.)),
             );
+            who = who.child(
+                ui::card_note(tr(
+                    "Listed names are not checked against accounts. Anyone who can reach the server can join with one.",
+                ))
+                .mt(px(10.)),
+            );
         }
 
         let body = div()

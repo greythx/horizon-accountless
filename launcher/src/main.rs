@@ -301,6 +301,9 @@ struct Launcher {
     root_focus: FocusHandle,
     /// The game is waiting for its files and Java before it starts (`start_java`).
     starting_client: Option<String>,
+    /// The instance chosen when Play was pressed, for `Msg::Launch`: the player can switch the
+    /// sidebar's selection while the start is in flight.
+    starting_instance: Option<String>,
     /// Play was pressed on a version not prepared yet: it starts once this preparation ends well.
     play_when_prepared: Option<String>,
     /// The window's width at the last frame: Home's head lays out by it, as the mockup's `xl`.
@@ -541,6 +544,7 @@ impl Launcher {
             root_focus: cx.focus_handle(),
             palette: None,
             toast_seen: None,
+            starting_instance: None,
             starting_client: None,
             play_when_prepared: None,
             window_width: 0.,
@@ -883,6 +887,7 @@ impl Launcher {
                 Msg::Launch(tag) => {
                     let Some(_) = self.starting_client.take() else {
                         // The start was called off.
+                        self.starting_instance = None;
                         continue;
                     };
                     {
@@ -898,7 +903,13 @@ impl Launcher {
                                 (applied, id)
                             }
                             None => {
-                                let instance = instances::selected();
+                                let instance = self
+                                    .starting_instance
+                                    .take()
+                                    .and_then(|id| {
+                                        instances::list().into_iter().find(|i| i.id == id)
+                                    })
+                                    .unwrap_or_else(instances::selected);
                                 (instances::apply(&mut cmd, &instance), Some(instance.id))
                             }
                         };
@@ -1452,6 +1463,7 @@ impl Launcher {
         // What the resources lack (built-in packs, panorama, sounds) comes first; `drain`
         // starts the game when it arrives.
         self.starting_client = Some(tag.clone());
+        self.starting_instance = self.selected_instance().map(|i| i.id.clone());
         self.play_pressed = Some(Instant::now());
         let tx = self.tx.clone();
         // Registry mods update before the game reads them (`horizon::auto`); native mods only
@@ -2542,7 +2554,9 @@ impl Launcher {
         let minecraft = self.settings.minecraft_dir.as_deref().map_or_else(
             || {
                 div()
-                    .child(tr("Not found. Choose the folder where your launcher keeps Minecraft."))
+                    .child(tr(
+                        "Not found. Choose the folder where your launcher keeps Minecraft.",
+                    ))
                     .into_any_element()
             },
             |p| {
@@ -2666,24 +2680,19 @@ impl Launcher {
                 .overflow_hidden()
                 .children(picture.into_iter().flatten())
                 .child(
-                    div()
-                        .relative()
-                        .flex()
-                        .items_end()
-                        .gap(px(32.))
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .flex()
-                                .flex_col()
-                                .gap(px(28.))
-                                .child(hero)
-                                .child(actions)
-                                // The preparation's steps right under Play, where the player looks
-                                // after pressing it, not below the fold (#666).
-                                .children(steps),
-                        ),
+                    div().relative().flex().items_end().gap(px(32.)).child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(28.))
+                            .child(hero)
+                            .child(actions)
+                            // The preparation's steps right under Play, where the player looks
+                            // after pressing it, not below the fold (#666).
+                            .children(steps),
+                    ),
                 )
         };
         let mut page = div().flex().flex_col().gap(px(28.)).child(banner);
@@ -3076,6 +3085,9 @@ impl Launcher {
                         }
                         this.settings.game_architecture = choice;
                         this.save_settings();
+                        // The list's assets follow the architecture; fetch it again so an
+                        // install after this switch doesn't pick the old architecture's file.
+                        this.fetch_releases();
                         cx.notify();
                     });
                 }
@@ -3214,11 +3226,9 @@ impl Launcher {
         ) {
             (false, Some(why)) => div().text_color(t.danger).child(why).into_any_element(),
             _ => div()
-                .child(tr(
-                    "Downloads go through this proxy (http://host:port, \
+                .child(tr("Downloads go through this proxy (http://host:port, \
                      socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the \
-                     launcher was started with one.",
-                ))
+                     launcher was started with one."))
                 .into_any_element(),
         };
         if glass_ui::flat() {
