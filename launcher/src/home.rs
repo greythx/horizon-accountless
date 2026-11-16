@@ -8,12 +8,7 @@ use theme::night;
 impl Launcher {
     /// The focal point: what will start and its state, the instance's name, when it was played.
     /// No `tag`: a Java instance's Minecraft (`game` then names its loader too).
-    pub(super) fn hero(
-        &mut self,
-        tag: &str,
-        game: &str,
-        prepared: bool,
-    ) -> Div {
+    pub(super) fn hero(&mut self, tag: &str, game: &str, prepared: bool) -> Div {
         let t = self.theme;
         let n = t.night;
         let icon = self
@@ -171,7 +166,6 @@ impl Launcher {
                     })
             }))
     }
-
 }
 
 impl Launcher {

@@ -488,7 +488,8 @@ impl Launcher {
                     line.push(trf("Built on {base}", &[("base", &about.base)]));
                 }
                 if let Some(about) = build_import::about(&tag) {
-                    let base = horizon_launcher::backend::nightly_label(&about.base).unwrap_or(about.base);
+                    let base =
+                        horizon_launcher::backend::nightly_label(&about.base).unwrap_or(about.base);
                     line.push(trf("Game files from {base}", &[("base", &base)]));
                     line.push(about.file);
                 }

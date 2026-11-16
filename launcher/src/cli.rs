@@ -100,8 +100,6 @@ enum ServersCmd {
     Forget { server: String },
 }
 
-
-
 #[derive(Subcommand)]
 enum ModpackCmd {
     /// The imported packs and their coverage (the default)
@@ -1325,10 +1323,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 println!("Imported {tag} and selected it. Prepare it next: horizon-launcher prepare --version {tag}");
             }
         }
-        Cmd::Prepare {
-            minecraft,
-            version,
-        } => {
+        Cmd::Prepare { minecraft, version } => {
             let tag = backend::resolve_version(version.as_deref())?;
             let minecraft = backend::minecraft_dir(minecraft)?;
             let (preparer, minecraft) =
