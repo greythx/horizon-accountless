@@ -829,6 +829,9 @@ impl Launcher {
         STARTED_HERE.lock().unwrap().push(dir.clone());
         self.servers.restart_needed.clear();
         self.server_job("Starting", move |log| {
+            // A server registered before this build may still carry online mode; this fork hosts
+            // offline servers only. Best effort; the setting applies at the next start.
+            let _ = servers::run(&dir, &["config", "set", "server.online_mode=false"]);
             if let Some(api) = servers::Api::open(&dir) {
                 if let Ok(status) = api.call("GET", "/api/v1/status", None) {
                     if status["phase"] == "stopped"
@@ -1508,6 +1511,9 @@ impl Launcher {
                 if !dir.join("server.toml").is_file() {
                     servers::run(&dir, &["init", "--yes"])?;
                 }
+                // An imported server arrives with vanilla's default (online mode on); this fork
+                // hosts only offline servers.
+                servers::run(&dir, &["config", "set", "server.online_mode=false"])?;
                 let entry = Entry {
                     name,
                     dir,

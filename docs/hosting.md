@@ -104,8 +104,11 @@ server then stops with "registries.json not found next to the resources". Prepar
 
 ```sh
 mkdir my-server && cd my-server
-horizon-server init
+horizon-server init --offline
 ```
+
+In this fork, always pass `--offline`: no client can sign in to online mode, and a server created
+without it refuses every player who tries to join (see "Before you start").
 
 `init` asks five things and writes `server.toml`:
 
@@ -120,10 +123,12 @@ It then tells you where it found the game and its files. Every question has a fl
 script:
 
 ```sh
-horizon-server init --eula --world survival --seed 12345 --port 25565 --whitelist --player Alex --op Alex --yes
+horizon-server init --eula --world survival --seed 12345 --port 25565 --whitelist --player Alex --op Alex --offline --yes
 ```
 
 `--no-whitelist` turns the whitelist off, and `--offline` turns online mode off (see "Before you start").
+Manual server creation needs `--offline` in this fork — without it the server is in online mode and no
+client of this fork can join it.
 The players you add are looked up as Minecraft accounts in online mode, and get offline UUIDs on an offline
 server, as vanilla does.
 

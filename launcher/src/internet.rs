@@ -15,7 +15,7 @@ const RELOAD: Duration = Duration::from_secs(30);
 
 pub(super) enum Event {
     State(State),
-    Token(Option<String>),
+    Token(Result<Option<String>, String>),
     Invites(Result<Vec<Invite>, String>),
     Policy(Result<(Value, Option<String>), String>),
     /// An action finished: what to tell the player, and whether to read invites and policy again.
@@ -105,10 +105,8 @@ impl Launcher {
         std::thread::spawn(move || {
             let _ = tx.send(Event::State(tailscale::status()));
             if want_token {
-                let token = horizon_launcher::secrets_file::get(tailscale::TOKEN_KEY)
-                    .ok()
-                    .flatten();
-                let _ = tx.send(Event::Token(token));
+                let token = Event::Token(horizon_launcher::secrets_file::get(tailscale::TOKEN_KEY));
+                let _ = tx.send(token);
             }
         });
     }
@@ -126,9 +124,15 @@ impl Launcher {
                     self.internet_load();
                 }
             }
-            Event::Token(token) => {
-                i.token = Some(token);
+            Event::Token(Ok(Some(token))) => {
+                i.token = Some(Some(token));
                 self.internet_load();
+            }
+            // Nothing saved yet; the panel offers to paste a token. A failed storage read keeps
+            // `i.token` unset (above), so the next tick tries again.
+            Event::Token(Ok(None)) => i.token = Some(None),
+            Event::Token(Err(e)) => {
+                i.message = Some(Err(format!("Could not read the saved access token: {e}")));
             }
             Event::Invites(r) => i.invites = Some(r),
             Event::Policy(r) => i.policy = Some(r),
@@ -185,7 +189,10 @@ impl Launcher {
     }
 
     fn forget_token(&mut self) {
-        let _ = horizon_launcher::secrets_file::delete(tailscale::TOKEN_KEY);
+        if let Err(e) = horizon_launcher::secrets_file::delete(tailscale::TOKEN_KEY) {
+            self.internet.message = Some(Err(format!("Could not forget the access token: {e}")));
+            return;
+        }
         let i = &mut self.internet;
         i.token = Some(None);
         i.invites = None;

@@ -300,6 +300,9 @@ struct Launcher {
     root_focus: FocusHandle,
     /// The game is waiting for its files and Java before it starts (`start_java`).
     starting_client: Option<String>,
+    /// The instance chosen when Play was pressed, for `Msg::Launch`: the player can switch the
+    /// sidebar's selection while the start is in flight.
+    starting_instance: Option<String>,
     /// Play was pressed on a version not prepared yet: it starts once this preparation ends well.
     play_when_prepared: Option<String>,
     /// The window's width at the last frame: Home's head lays out by it, as the mockup's `xl`.
@@ -540,6 +543,7 @@ impl Launcher {
             root_focus: cx.focus_handle(),
             palette: None,
             toast_seen: None,
+            starting_instance: None,
             starting_client: None,
             play_when_prepared: None,
             window_width: 0.,
@@ -882,6 +886,7 @@ impl Launcher {
                 Msg::Launch(tag) => {
                     let Some(_) = self.starting_client.take() else {
                         // The start was called off.
+                        self.starting_instance = None;
                         continue;
                     };
                     {
@@ -897,7 +902,13 @@ impl Launcher {
                                 (applied, id)
                             }
                             None => {
-                                let instance = instances::selected();
+                                let instance = self
+                                    .starting_instance
+                                    .take()
+                                    .and_then(|id| {
+                                        instances::list().into_iter().find(|i| i.id == id)
+                                    })
+                                    .unwrap_or_else(instances::selected);
                                 (instances::apply(&mut cmd, &instance), Some(instance.id))
                             }
                         };
@@ -1451,6 +1462,7 @@ impl Launcher {
         // What the resources lack (built-in packs, panorama, sounds) comes first; `drain`
         // starts the game when it arrives.
         self.starting_client = Some(tag.clone());
+        self.starting_instance = self.selected_instance().map(|i| i.id.clone());
         self.play_pressed = Some(Instant::now());
         let tx = self.tx.clone();
         // Registry mods update before the game reads them (`horizon::auto`); native mods only
@@ -3072,6 +3084,9 @@ impl Launcher {
                         }
                         this.settings.game_architecture = choice;
                         this.save_settings();
+                        // The list's assets follow the architecture; fetch it again so an
+                        // install after this switch doesn't pick the old architecture's file.
+                        this.fetch_releases();
                         cx.notify();
                     });
                 }

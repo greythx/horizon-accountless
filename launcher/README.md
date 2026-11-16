@@ -41,10 +41,12 @@ The opening, then Play ([clip](docs/opening.webm)):
   26.3, the 26.3 server jar from that install's version json — downloaded from Mojang, the one
   file Horizon's preparation takes from there — and Java 25) and copies its sounds from your
   install's asset store (`horizon-prepare sounds`; an install without them only
-  leaves the game silent), then starts the client. This fork never downloads game files from
+  leaves the game silent), then starts the client. This fork never downloads the game files from
   Mojang: preparation itself always comes from your own Minecraft install (any launcher's — the
   official one, Prism, MultiMC, the Modrinth App, ATLauncher, GDLauncher; Settings → Minecraft
-  folder, or **From my install** on the Play page). If your install lacks the pinned version, the
+  folder, or **From my install** on the Play page). The one exception is the 26.3 server jar,
+  downloaded once from your own install's version json — Horizon's preparer needs it, exactly as
+  upstream's `PLAY.txt` instructs. If your install lacks the pinned version, the
   launcher says so instead of downloading it. Preparing is
   horizon-prepare: linked into the launcher, used in-process when a version ships the same
   preparer sources, else that version's own `horizon-prepare`; versions released before it
