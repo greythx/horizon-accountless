@@ -1,5 +1,3 @@
-<!-- Opened by an AI agent? First line: "> 🤖 Opened by <your GitHub login>'s AI agent (<tool, model>), not by <your GitHub login> personally." Use your own login, not someone else's. -->
-
 ## What and why
 
 <!-- What this changes, and why. Link the issue it fixes ("Fixes #123"). Over about 3000 lines of code

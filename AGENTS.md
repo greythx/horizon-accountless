@@ -17,16 +17,10 @@ Feature → files → harness for the most-changed areas: [docs/architecture.md]
   `--game-dir` pointing at it, or they land in the repo root, hidden by `.gitignore`. For the
   launcher, `HORIZON_LAUNCHER_TRASH`, `HORIZON_LAUNCHER_CLIPBOARD` and `HORIZON_LAUNCHER_DESKTOP` pointing into the scratch home. Never write to
   `~/.local/share/{applications,horizon,horizon-launcher}` or `~/.local/bin`.
-- **Mark what an agent posts.** A PR body starts with a line naming the person whose agent opened it and
-  the tool: `> 🤖 Opened by <login>'s AI agent (<tool, model>), not by <login> personally.`, where `<login>`
-  is the GitHub account the PR is opened from (`gh api user --jq .login`). Issues say "Filed by", reviews
-  "Review by". Every comment starts with `🤖 Agent:`. Write only as the person you work for: the lines on
-  this page that name Ludovic are for his own agents (account `ludovic111`), never for anyone else's.
-- **Attribution.** Commits end with a `Co-Authored-By:` line for the agent that wrote them, and PR bodies
-  with that agent's own "Generated with" line. Example, Ludovic's agents (Claude Code on `ludovic111`):
-  first line `> 🤖 Opened by Ludovic's AI agent (Claude), not by Ludovic himself.`, commits
-  `Co-Authored-By: Claude <model> <noreply@anthropic.com>`, last line
-  `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
+- **How AI assistance is recorded.** Name the tool, not "the author": an agent commit carries
+  `Assisted-by: <model> (<harness>)` (for example `Assisted-by: Inkling 2 Small Free (opencode)`), and a PR
+  body ends with `Built with <tool> (<model>).` Nothing of the 🤖 or co-author kind, no fake identities, no robot
+  voice. The committer stays the accountable author.
 - **Layers** ([docs/layers.md](docs/layers.md)): engine uses engine; platform uses engine and platform; Horizon (its extras,
   cosmetics, shop, telemetry, launcher) uses platform and Horizon only, never the engine: it moves to its own repository
   later. `tools/check_layers.py` checks it. New Horizon code goes behind `horizon-extras`; built-in addresses go in
