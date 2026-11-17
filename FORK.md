@@ -59,6 +59,12 @@ what *this fork* does differently.
    `servers create`) always start with `--offline`: with no accounts anywhere in this fork, there is
    no Minecraft account verification for them to do. Hosted servers cannot run online mode in this
    fork (no sign-in anywhere), and the launcher does not expose the online-mode toggle.
+10. **No parity audits.** Horizon's vanilla-parity harnesses need a self-hosted runner holding
+   the Minecraft 26.3 jars (Horizon never downloads them); this fork has no such runner, so the
+   job would queue forever with no merge effect — parity is not a required check, and this fork
+   never changes a harness or an oracle. `parity-scope` in `.github/workflows/ci.yml` short-
+   circuits to `run=false` on this repository, and `nightly audit`/`parity-main` stay disabled
+   here. If this fork ever registers a `horizon-game` runner, delete that short-circuit.
 
 Everything else — the game, the mods system, the launcher's features — is built from the upstream
 source with the changes above. If something looks different from upstream, that difference is a bug or

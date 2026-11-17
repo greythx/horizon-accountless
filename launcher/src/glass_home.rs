@@ -13,21 +13,12 @@ const TALL: f32 = 56.;
 /// Play and the version are narrower. The theme editor also puts its two columns side by side
 /// from it.
 pub(super) const WIDE: f32 = 1280.;
-/// The window width from which the top bar's pages show at full size.
-pub(super) const TOP_BAR_WIDE: f32 = 1380.;
 /// The window width from which pages put their head and cards side by side (Overview, Mods,
 /// Versions, Settings' About); under it they stack, and Home's tabs drop their icons.
 pub(super) const SIDE_BY_SIDE: f32 = 1200.;
 /// Under this window width the top bar's tabs tighten and Settings' sections go above the page.
 pub(super) const COMPACT: f32 = 1180.;
-/// Under this window width Home's tabs tighten further.
-pub(super) const NARROW: f32 = 960.;
-/// Under this window width Home's tabs are as tight as they go.
-pub(super) const NARROWEST: f32 = 750.;
 
-/// Height above the Version menu's rows that the window gives to the page's head: the top bar,
-/// the tabs, the title and the button the menu hangs from (taken a little high, so the menu
-/// never runs past the window's foot).
 const PICKER_ABOVE: f32 = 360.;
 /// What the menu takes besides its rows: its padding, the Manage versions row (55 high) and a
 /// margin under it.
@@ -48,7 +39,7 @@ pub(super) struct PickerState {
     /// The menu is open.
     pub(super) open: bool,
     /// Its rows scroll.
-    pub(super) scroll: Scrollbar,
+    pub(super) scroll: crate::scrollbar::Scrollbar,
     /// The window's height when the menu opened: its rows are as tall as the room under the
     /// button.
     pub(super) window_height: f32,
@@ -81,12 +72,29 @@ impl Launcher {
         }
         // The Play group, the version picker and the folder: one line from 1280 px.
         let wide = self.window_width >= WIDE;
-        let mods = ui::big_icon("home-mods", "puzzle", &self.theme).on_click(cx.listener(
-            |this, _: &ClickEvent, _, cx| {
+        let mods = ui::big_icon("home-mods", "puzzle", &self.theme)
+            .tooltip(ui::tip(tr("Mods in this instance")))
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                 this.home_tab = home_tabs::HomeTab::Mods;
                 cx.notify();
-            },
-        ));
+            }));
+        // Instance settings: the sheet down the right side.
+        let settings = |this: &mut Self, cx: &mut Context<Self>| {
+            let instance = this.selected_instance().cloned()?;
+            // Memory is set only for Java instances.
+            let tip = match instance.java {
+                Some(_) => "Edit this instance: its name, version, memory and more",
+                None => "Edit this instance: its name, icon, version and more",
+            };
+            Some(
+                ui::big_icon("home-settings", "pencil-edit-02", &this.theme)
+                    .tooltip(ui::tip(tr(tip)))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.open_instance_sheet(instance.clone(), glass_sheet::SheetTab::General);
+                        cx.notify();
+                    })),
+            )
+        };
         let actions = if wide {
             div()
                 .mt(px(32.))
@@ -96,9 +104,9 @@ impl Launcher {
                 .items_center()
                 .gap(px(10.))
                 .child(self.play_group(tag, prepared || java.is_some(), cx))
-                .children(java.is_none().then(|| self.glass_picker(cx)))
                 .children(Some(mods))
                 .children(self.folder_group(java.is_none(), cx))
+                .children(settings(self, cx))
                 .child(div().flex_1().min_w(px(22.)))
         } else {
             div().mt(px(32.)).flex().flex_col().gap(px(12.)).child(
@@ -108,7 +116,8 @@ impl Launcher {
                     .gap(px(10.))
                     .child(self.play_group(tag, prepared || java.is_some(), cx))
                     .children(java.is_none().then(|| self.glass_picker(cx)))
-                    .children(self.folder_group(java.is_none(), cx)),
+                    .children(self.folder_group(java.is_none(), cx))
+                    .children(settings(self, cx)),
             )
         };
         div()
@@ -116,61 +125,102 @@ impl Launcher {
             .flex_col()
             .min_w_0()
             .pt(px(64. - crate::glass::CONTENT_INSET))
-            .child(self.edition_tabs(java.is_some(), cx))
-            .child(self.home_title(cx))
-            .child(self.played_text())
-            .child(actions)
+            .child(motion::enter(
+                ElementId::named_usize("home-title", self.switches),
+                1,
+                self.home_title(cx),
+            ))
+            .child(motion::enter(
+                ElementId::named_usize("home-status", self.switches),
+                2,
+                self.played_text(),
+            ))
+            .child(motion::enter(
+                ElementId::named_usize("home-actions", self.switches),
+                3,
+                actions,
+            ))
     }
 
-    /// The edition tabs (`Tabs`, size `sm`): the instance's own lit. An instance's edition is
-    /// chosen when it is made, so the other tab goes to an instance of that edition
-    /// ([`Self::switch_edition`]).
-    fn edition_tabs(&mut self, java: bool, cx: &mut Context<Self>) -> Div {
-        let grass = self.grass_mark(18.);
-        let horizon = self.horizon_mark(18.);
-        let tab = |label: &'static str, icon: AnyElement, open: bool| {
-            let d = div()
-                .id(SharedString::from(format!("edition-{label}")))
-                .flex()
-                .flex_none()
-                .items_center()
-                .gap(px(6.))
-                .h(px(32.))
-                .px(px(12.))
-                .rounded(px(radius::CONTROL))
-                .font_family(horizon_theme::glass::FONT)
-                .text_size(px(13.))
-                .line_height(px(18.))
-                .child(icon)
-                .child(tr(label));
-            if open {
-                d.bg(white(fill::ACTIVE))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(white(ink::FULL))
-            } else {
-                d.text_color(white(ink::OFF))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(white(fill::ROW_HOVER)).text_color(white(ink::FULL)))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.switch_edition(label == "Java Edition", cx);
-                        cx.notify();
-                    }))
-            }
-        };
-        let java_icon = match grass {
+    /// The edition switch over the rail, in the top bar where Horizon's mark was: Horizon's mark
+    /// and the grass block on a segmented control whose lit pill slides to the selected
+    /// instance's edition. An instance's edition is chosen when it is made, so the other side
+    /// goes to an instance of that edition ([`Self::switch_edition`]).
+    pub(super) fn edition_switch(&mut self, cx: &mut Context<Self>) -> Stateful<Div> {
+        const ID: &str = "edition-switch";
+        let java = self.selected_instance().is_some_and(|i| i.java.is_some());
+        let horizon = self.horizon_mark(20.);
+        let grass = match self.grass_mark(20.) {
             Some(image) => gpui::img(image)
                 .flex_none()
-                .size(px(18.))
+                .size(px(20.))
                 .rounded(px(5.))
                 .into_any_element(),
             None => div().into_any_element(),
         };
-        div()
+        let origin = ui::PillOrigin::default();
+        let mut seg = div()
+            .id(ID)
+            .relative()
             .flex()
-            .items_center()
-            .gap(px(4.))
-            .child(tab("Rust Edition", horizon, !java))
-            .child(tab("Java Edition", java_icon, java))
+            .flex_none()
+            .gap(px(2.))
+            .p(px(3.))
+            .rounded(px(radius::LARGE))
+            .bg(white(0.04))
+            .border_1()
+            .border_color(white(ui::edge::REST))
+            .child(ui::pill_origin(&origin));
+        for (i, (label, mark)) in [
+            ("Horizon: your Horizon instances", horizon),
+            ("Java Edition: your Java instances", grass),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let on = (i == 1) == java;
+            let d = div()
+                .id(SharedString::from(format!("{ID}-{i}")))
+                .relative()
+                .flex()
+                .flex_none()
+                .items_center()
+                .justify_center()
+                .size(px(30.))
+                .rounded(px(radius::CONTROL - 1.))
+                .child(
+                    div()
+                        .relative()
+                        .opacity(if on { 1. } else { 0.5 })
+                        .child(mark),
+                )
+                .child(ui::pill_probe(ID, i, origin.clone()))
+                .tooltip(ui::tip(tr(label)));
+            let d = if on {
+                d
+            } else {
+                d.cursor_pointer()
+                    .hover(|s| s.bg(white(fill::ROW_HOVER)))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.switch_edition(i == 1, cx);
+                        this.go(Page::Play);
+                        cx.notify();
+                    }))
+            };
+            seg = seg.child(crate::keyboard(d, &self.theme));
+        }
+        let pill = ui::sliding_pill(ID, usize::from(java), || {
+            div()
+                .absolute()
+                .top(px(3.))
+                .bottom(px(3.))
+                .rounded(px(radius::CONTROL - 1.))
+                .border_1()
+                .border_color(ui::color(ui::look().accent).opacity(0.6))
+                .bg(ui::color(ui::look().accent).opacity(0.2))
+        });
+        // The pill first, so the marks are drawn over it.
+        seg.children(pill)
     }
 
     /// An edition tab's click: the instance of that edition (`java`) played last, or, with none,
@@ -198,8 +248,18 @@ impl Launcher {
             return div();
         };
         let edit = instance.clone();
+        let cut = ui::cut(
+            cx,
+            &self.rooms,
+            "home-title",
+            &instance.name,
+            horizon_theme::glass::DISPLAY_FONT,
+            44.,
+            FontWeight::SEMIBOLD,
+        );
+        let version = self.version_chip(cx);
         div()
-            .mt(px(20.))
+            .mt(px(16.))
             .flex()
             .items_center()
             .gap(px(16.))
@@ -210,21 +270,35 @@ impl Launcher {
                     .cursor_pointer()
                     .hover(|s| s.opacity(0.85))
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.open_instance_dialog(Some(edit.clone()));
+                        this.open_instance_sheet(edit.clone(), glass_sheet::SheetTab::General);
                         cx.notify();
                     }))
                     .child(self.glass_instance_icon(&instance, 56.)),
             )
             .child(
                 div()
+                    .id("home-title")
+                    .relative()
                     .min_w_0()
                     .truncate()
                     .font_family(horizon_theme::glass::DISPLAY_FONT)
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_size(px(64.))
-                    .line_height(px(64.))
+                    .text_size(px(44.))
+                    .line_height(px(48.))
                     .text_color(white(ink::FULL))
+                    // A long name is cut at the header's width: the whole of it on hover.
+                    .when(cut, |d| d.tooltip(ui::tip(instance.name.clone())))
+                    .child(ui::room(&self.rooms, "home-title".into()))
                     .child(instance.name),
+            )
+            .child(div().flex_1())
+            .child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .gap(px(8.))
+                    .children(version),
             )
     }
 
@@ -244,16 +318,32 @@ impl Launcher {
                         ("when", &last_played(when)),
                     ],
                 ),
+                // No accounts in this fork: every install can play once prepared.
                 None => tr("You haven't played this one yet. Press Play to start.").into(),
             },
             (None, None) => String::new(),
         };
+        // No player counters and no release-tracking in this fork: not watching how many.
+        // A local unsigned developer base is said as such, with its trust warning.
+        let developer = self
+            .selected_instance()
+            .and_then(|i| self.version_of(i))
+            .and_then(|tag| {
+                horizon_launcher::developer_install::instance_status(tag, backend::is_prepared(tag))
+            });
         ui::text(15., FontWeight::NORMAL, ink::STRONG)
-            .mt(px(16.))
+            .mt(px(10.))
+            .ml(px(-10.))
+            .px(px(10.))
+            .py(px(6.))
+            .rounded(px(radius::CONTROL))
+            .bg(gpui::black().opacity(0.28))
+            .self_start()
             .flex()
             .flex_wrap()
             .gap(px(4.))
             .child(line)
+            .children(developer.map(|status| div().w_full().text_color(ui::warn()).child(status)))
     }
 
     /// Play and its ⋯ menu (`PlayGroup`): Stop while the game runs, Update when the launcher's
@@ -262,6 +352,8 @@ impl Launcher {
         let t = self.theme;
         let accent = ui::color(self.look.accent);
         let running = self.client.is_some();
+        // Horizon game installs happen by hand in this fork: there is no update path, so
+        // there is no "Updating" button; a pinned build installs on its own (`own`).
         // The version this instance keeps, downloading since it was made or edited to play it.
         let own = self
             .selected_instance()
@@ -271,15 +363,53 @@ impl Launcher {
                 let running = self.installing.as_ref().filter(|(t, _)| t == v);
                 running.map(|(_, p)| Some(*p)).or(queued.then_some(None))
             });
-        let busy = match (own, self.preparing, &self.starting_client) {
-            (Some(p), _, _) => Some((tr("Installing"), p)),
-            (_, true, _) => Some((
-                tr("Preparing"),
-                horizon_launcher::mojang::progress().map(|(d, n)| d as f32 / n.max(1) as f32),
-            )),
-            (_, _, Some(_)) => Some((tr("Starting"), None)),
-            _ => None,
-        };
+        let mine = self
+            .selected_instance()
+            .is_some_and(|i| self.native_for.as_deref() == Some(i.id.as_str()));
+        let building = mine && self.native_step.is_some();
+        // Native mods that changed since the last build: Play builds them first, one button.
+        let needs_build = !building
+            && self
+                .selected_instance()
+                .filter(|i| i.java.is_none())
+                .is_some_and(|i| {
+                    matches!(
+                        self.native_state_of(i),
+                        native_status::State::NotBuilt | native_status::State::Outdated
+                    )
+                });
+        let busy: Option<(SharedString, Option<f32>)> =
+            match (self.preparing, &self.starting_client) {
+                (_, _) if own.is_some() => Some((tr("Installing").into(), own.flatten())),
+                (true, _) => Some((
+                    tr("Preparing").into(),
+                    horizon_launcher::mojang::progress().map(|(d, n)| d as f32 / n.max(1) as f32),
+                )),
+                (_, Some(_)) => Some((tr("Starting").into(), None)),
+                // This instance's mods building (Build and play): the build's overall progress,
+                // the same figure as its card.
+                _ if building => Some((
+                    tr("Building mods").into(),
+                    self.native_progress
+                        .map(|p| build_mode::percent(Some(p)) as f32 / 100.),
+                )),
+                // One build at a time: another instance's build first, and this one says whose.
+                _ if needs_build && self.native_step.is_some() => Some((
+                    trf(
+                        "Waiting for {instance}",
+                        &[(
+                            "instance",
+                            self.native_for
+                                .as_deref()
+                                .and_then(|id| self.instances.list.iter().find(|i| i.id == id))
+                                .map_or("", |i| i.name.as_str()),
+                        )],
+                    )
+                    .into(),
+                    None,
+                )),
+                _ => None,
+            };
         let open = self.home_menu == HomeMenu::Play;
         // What is drawn on the accent takes its own ink (white on the default violet), in the
         // light look too, where `white` is the page's dark ink; Stop sits on a quiet fill.
@@ -301,8 +431,10 @@ impl Launcher {
             .rounded(px(radius::CONTROL))
             .cursor_pointer()
             .when(open, |d| d.bg(gpui::black().opacity(0.2)))
-            .hover(|s| s.bg(gpui::black().opacity(0.2)))
-            .child(ui::icon("more-horizontal", 20., glyph))
+            .when(!open, |d| {
+                d.child(ui::back_tint(radius::CONTROL, gpui::black().opacity(0.2)))
+            })
+            .child(ui::icon("more-horizontal", 20., glyph).relative())
             .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                 cx.stop_propagation();
                 if !this.closed_by_this_press(event) {
@@ -313,18 +445,46 @@ impl Launcher {
                 }
                 cx.notify();
             }));
+        // A build under way is cancelled from the button it was started from.
+        let more = if building {
+            div()
+                .id("play-cancel")
+                .occlude()
+                .absolute()
+                .right(px(8.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .size(px(40.))
+                .rounded(px(radius::CONTROL))
+                .cursor_pointer()
+                .hover(|s| s.bg(gpui::black().opacity(0.2)))
+                .child(ui::icon("stop", 18., glyph))
+                .tooltip(ui::tip(tr("Stop the build")))
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    cx.stop_propagation();
+                    this.play_after_build = None;
+                    native_mods::cancel();
+                    cx.notify();
+                }))
+        } else {
+            more
+        };
         let base = div()
             .relative()
             .flex()
             .items_center()
             .flex_none()
-            .w(px(if self.window_width >= WIDE {
+            // At least the mockup's width, wider when the label needs it ("Prepare & play",
+            // "Sign in to play", a long translation).
+            .min_w(px(if self.window_width >= WIDE {
                 200.
             } else {
                 160.
             }))
             .h(px(TALL))
             .overflow_hidden()
+            .border_1()
             .rounded(px(radius::LARGE));
         let body = |label: SharedString, icon: &'static str| {
             div()
@@ -334,16 +494,24 @@ impl Launcher {
                 .items_center()
                 .justify_center()
                 .gap(px(10.))
-                .pr(px(40.))
+                .pl(px(20.))
+                .pr(px(52.))
+                .whitespace_nowrap()
                 .font_family(horizon_theme::glass::FONT)
                 .text_size(px(18.))
                 .font_weight(FontWeight::SEMIBOLD)
-                .child(ui::icon(icon, 20., glyph))
+                // The glyph leans into the press while the pointer is on Play.
+                .child(
+                    ui::icon(icon, 20., glyph)
+                        .group_hover("play-glyph", |s| s.ml(px(3.)).mr(px(-3.))),
+                )
                 .child(label)
         };
+        let busy_none = busy.is_none();
         let group = match busy {
             Some((label, progress)) => base
                 .bg(accent.opacity(0.35))
+                .border_color(accent.opacity(0.5))
                 .child(
                     div()
                         .absolute()
@@ -359,7 +527,9 @@ impl Launcher {
                         .flex()
                         .flex_1()
                         .justify_center()
-                        .pr(px(40.))
+                        .pl(px(16.))
+                        .pr(px(48.))
+                        .whitespace_nowrap()
                         .text_color(on_accent)
                         .font_family(horizon_theme::glass::FONT)
                         .text_size(px(16.))
@@ -369,21 +539,47 @@ impl Launcher {
                             None => format!("{label}…"),
                         }),
                 ),
-            None if running => base.bg(white(0.14)).child(
-                body(tr("Stop").into(), "stop")
-                    .id("play")
-                    .cursor_pointer()
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        if let Some(client) = &this.client {
-                            client.kill();
-                        }
-                        cx.notify();
-                    })),
-            ),
+            None if running => base
+                .bg(white(0.14))
+                .border_color(white(ui::edge::HOVER))
+                .child(
+                    body(tr("Stop").into(), "stop")
+                        .id("play")
+                        .cursor_pointer()
+                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                            if let Some(client) = &this.client {
+                                client.kill();
+                            }
+                            cx.notify();
+                        })),
+                ),
             None => {
-                let press = play_press(ready, false);
-                let main = body(tr("Play").into(), "play").id("play").cursor_pointer();
+                let press = play_press(ready, Some(true), false);
+                // A Stable/pinned Horizon build installs itself by hand in this fork: there is
+                // no update button; Play stays the way to play. (`needs_build` stays: native
+                // mods rebuilt by this instance still ride on Play here.)
+                let build_first = needs_build && matches!(press, PlayPress::Play);
+                let (label, icon) = if build_first {
+                    (tr("Build and play"), "hammer")
+                } else {
+                    (tr(play_label(press, Some(true))), "play")
+                };
+                let main = crate::track_hover(
+                    body(label.into(), icon).id("play").cursor_pointer(),
+                    SharedString::from("play"),
+                );
                 let main = match press {
+                    PlayPress::Play if build_first => {
+                        main.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                            this.play_after_build = this.selected_instance().map(|i| i.id.clone());
+                            if this.settings.native_mods_allowed_at.is_some() {
+                                this.build_native();
+                            } else {
+                                this.request_native_build_consent();
+                            }
+                            cx.notify();
+                        }))
+                    }
                     PlayPress::Play => main.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                         this.picker.open = false;
                         this.play();
@@ -392,25 +588,88 @@ impl Launcher {
                     PlayPress::PrepareThenPlay => {
                         main.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                             this.picker.open = false;
-                            this.play_when_prepared = this.selected().cloned();
-                            this.starting_instance = this.selected_instance().map(|i| i.id.clone());
+                            this.play_when_prepared = this
+                                .selected()
+                                .cloned()
+                                .zip(this.selected_instance().map(|i| i.id.clone()));
                             this.prepare();
                             cx.notify();
                         }))
                     }
                     PlayPress::Nothing => main.opacity(0.5).cursor_default(),
                 };
-                base.bg(accent)
+                // The gradient's far end leans away from the label's ink (deeper under white
+                // ink, lighter under dark ink), so the label and the menu dots on that end
+                // keep their contrast across the whole button.
+                let (accent_hex, ink) = (self.look.accent, self.look.on_accent);
+                let far = if horizon_theme::contrast(ink, 0x000000)
+                    > horizon_theme::contrast(ink, 0xffffff)
+                {
+                    horizon_theme::glass::mix_oklab(accent_hex, 0x000000, 0.75)
+                } else {
+                    ui::accent2()
+                };
+                base.bg(ui::grad(135., accent, ui::color(far)))
+                    .border_color(white(0.16))
+                    .shadow(ui::glows(vec![
+                        // The site's primary: a light line along the top edge, a glow under it.
+                        gpui::BoxShadow {
+                            color: white(0.22),
+                            offset: gpui::point(px(0.), px(1.)),
+                            blur_radius: px(0.),
+                            spread_radius: px(0.),
+                            inset: true,
+                        },
+                        gpui::BoxShadow {
+                            color: accent.opacity(0.7),
+                            offset: gpui::point(px(0.), px(6.)),
+                            blur_radius: px(22.),
+                            spread_radius: px(-8.),
+                            inset: false,
+                        },
+                    ]))
                     .text_color(on_accent)
-                    .hover(|s| s.opacity(0.92))
                     .child(main)
+                    .child(ui::sheen(&SharedString::from("play")))
             }
         };
-        let mut wrap = div()
-            .relative()
-            .child(keyboard(group.id("play-group"), &t).child(more));
+        // Ready to play: the accent's glow comes up under the pointer, a press dims it.
+        let primary = !running && busy_none;
+        let soft = ui::color(self.look.accent_soft);
+        let group = group
+            .id("play-group")
+            .group("play-glyph")
+            .when(primary, |d| {
+                d.hover(move |s| {
+                    s.border_color(white(0.34)).shadow(ui::glows(vec![
+                        gpui::BoxShadow {
+                            color: white(0.28),
+                            offset: gpui::point(px(0.), px(1.)),
+                            blur_radius: px(0.),
+                            spread_radius: px(0.),
+                            inset: true,
+                        },
+                        gpui::BoxShadow {
+                            color: accent.opacity(0.95),
+                            offset: gpui::point(px(0.), px(12.)),
+                            blur_radius: px(34.),
+                            spread_radius: px(-8.),
+                            inset: false,
+                        },
+                        gpui::BoxShadow {
+                            color: soft.opacity(0.5),
+                            offset: gpui::point(px(0.), px(0.)),
+                            blur_radius: px(0.),
+                            spread_radius: px(1.),
+                            inset: false,
+                        },
+                    ]))
+                })
+                .active(|s| s.opacity(0.92).shadow(Vec::new()))
+            });
+        let mut wrap = div().relative().child(keyboard(group, &t).child(more));
         if open {
-            let locked = running || busy.is_some();
+            let locked = running || !busy_none;
             let mut items: Vec<(&'static str, SharedString, String, bool, PlayItem)> = Vec::new();
             if !tag.is_empty() {
                 let version = backend::game_version(tag);
@@ -430,6 +689,7 @@ impl Launcher {
                     PlayItem::Prepare,
                 ));
             }
+            // No updates in this fork: there is no "Play without updating" entry.
             let id = self
                 .selected_instance()
                 .map(|i| (i.id.clone(), i.name.clone()));
@@ -635,6 +895,22 @@ impl Launcher {
         wrap
     }
 
+    /// What the instance plays, at the title's right: "Latest version", "Nov 11 update",
+    /// "26.3 · Fabric 0.17". Its versions are in instance settings, which a click opens on
+    /// Installation.
+    fn version_chip(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+        let instance = self.selected_instance()?.clone();
+        let label = self.sheet_version(&instance);
+        Some(
+            hero_button("home-version", "package-01", label.into())
+                .tooltip(ui::tip(tr("Change the version in instance settings")))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.open_instance_sheet(instance.clone(), glass_sheet::SheetTab::Installation);
+                    cx.notify();
+                })),
+        )
+    }
+
     /// The folder button and its ⋯ (`FolderGroup`), which shows under the pointer or while its
     /// menu is open: the instance's folder, its screenshots, and (Horizon) the Minecraft folder.
     fn folder_group(&self, horizon: bool, cx: &mut Context<Self>) -> Option<Div> {
@@ -645,6 +921,7 @@ impl Launcher {
         let opener = home.clone();
         let more = div()
             .id("folder-more")
+            .relative()
             .flex()
             .flex_none()
             .items_center()
@@ -661,8 +938,10 @@ impl Launcher {
                     .bg(white(fill::SELECTED))
             })
             .group_hover("folder-group", |s| s.w(px(36.)).mr(px(8.)).opacity(1.))
-            .hover(|s| s.bg(white(fill::SELECTED)))
-            .child(ui::icon("more-horizontal", 20., white(ink::STRONG)))
+            .when(!open, |d| {
+                d.child(ui::back_tint(radius::CONTROL, white(fill::SELECTED)))
+            })
+            .child(ui::icon("more-horizontal", 20., white(ink::STRONG)).relative())
             .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
                 if !this.closed_by_this_press(event) {
                     this.home_menu = match this.home_menu {
@@ -674,21 +953,31 @@ impl Launcher {
             }));
         let group = div()
             .id("folder-group")
+            .relative()
             .flex()
             .items_center()
             .h(px(TALL))
             .rounded(px(radius::LARGE))
             .bg(white(fill::BUTTON))
-            .hover(|s| s.bg(white(fill::ACTIVE)))
+            .border_1()
+            .border_color(white(if open {
+                ui::edge::STRONG
+            } else {
+                ui::edge::REST
+            }))
+            .child(ui::back_edge(radius::LARGE, 0.05, true))
             .child(
                 div()
                     .id("home-folder")
+                    .relative()
                     .flex()
                     .items_center()
                     .justify_center()
-                    .size(px(TALL))
+                    .size(px(TALL - 2.))
                     .cursor_pointer()
+                    .active(|s| s.bg(white(0.1)))
                     .child(ui::icon("folder-01", 21., white(ink::STRONG)))
+                    .tooltip(ui::tip(tr("Open this instance's folder")))
                     .on_click(move |_, _, cx| {
                         let _ = std::fs::create_dir_all(&opener);
                         crate::glass_toast::open(cx, &opener);
@@ -767,7 +1056,7 @@ impl Launcher {
                 )
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     this.home_menu = HomeMenu::None;
-                    this.open_instance_dialog(Some(edit.clone()));
+                    this.open_instance_sheet(edit.clone(), glass_sheet::SheetTab::General);
                     cx.notify();
                 })),
             );
@@ -781,6 +1070,46 @@ impl Launcher {
 
 /// The instance of one edition (`java`) an edition tab goes to: of those the player can select,
 /// the one played last; among never played ones, the first listed.
+/// One of the two buttons at the hero title's right: 40 px glass with an 18 px icon and its
+/// label, the icons in one stroke and ink so the pair reads as one.
+fn hero_button(id: &'static str, icon: &'static str, label: SharedString) -> Stateful<Div> {
+    let id = SharedString::from(id);
+    let group = SharedString::from(format!("{id}-group"));
+    track_hover(
+        div()
+            .id(id.clone())
+            .group(group.clone())
+            .relative()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(px(8.))
+            .h(px(40.))
+            .pl(px(14.))
+            .pr(px(16.))
+            .rounded(px(radius::CONTROL))
+            .bg(white(fill::BUTTON))
+            .border_1()
+            .border_color(white(ui::edge::REST))
+            .cursor_pointer()
+            .font_family(horizon_theme::glass::FONT)
+            .text_size(px(14.))
+            .line_height(px(20.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(white(ink::BODY))
+            .hover(|s| s.text_color(white(ink::FULL)))
+            .active(|s| s.bg(white(0.18)))
+            .child(ui::hover_edge(&id, radius::CONTROL, 0.06, true))
+            .child(
+                ui::icon(icon, 18., white(ink::STRONG))
+                    .group_hover(group, |s| s.text_color(white(ink::FULL)))
+                    .relative(),
+            )
+            .child(div().relative().child(label)),
+        id,
+    )
+}
+
 fn edition_pick(
     list: &[horizon_launcher::instances::Instance],
     java: bool,
@@ -845,17 +1174,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_version_menus_rows_fit_the_room_under_the_button() {
-        // 760 high (the window's default): 760 - 360 above - 83 for the menu's padding and
-        // Manage versions = 317. The 600 px minimum window leaves 157; a short one keeps
-        // two and a half rows; a tall one stops at eight.
-        assert_eq!(picker_rows_max_height(760.), 317.);
-        assert_eq!(picker_rows_max_height(600.), 157.);
-        assert_eq!(picker_rows_max_height(400.), 130.);
-        assert_eq!(picker_rows_max_height(1400.), 440.);
-    }
-
-    #[test]
     fn an_edition_tab_goes_to_that_editions_instance_played_last() {
         use horizon_launcher::instances::{Instance, JavaGame, Kind};
         use std::time::{SystemTime, UNIX_EPOCH};
@@ -869,10 +1187,12 @@ mod tests {
             icon: None,
             group: None,
             version: None,
+            channel: Default::default(),
             played: Duration::ZERO,
             last_played: last,
             launch: Default::default(),
             java: java.then(JavaGame::default),
+            native_profile: Default::default(),
         };
         let list = [
             one("horizon", Kind::Default, false, at(50)),

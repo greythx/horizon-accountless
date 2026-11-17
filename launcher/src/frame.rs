@@ -12,9 +12,82 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-/// The sidebar's width and its distance from the window's edges (`w-[248px]`, `m-3.5`).
-pub const SIDEBAR: f32 = 248.;
+/// The rail's distance from the window's edges (`m-3.5`).
 pub const MARGIN: f32 = 14.;
+
+/// The rail's width at rest (icons) and open (icons and names), while the pointer is on it.
+pub const RAIL: f32 = 80.;
+pub const RAIL_OPEN: f32 = 248.;
+/// What drifting particles (Taiga's snow, Hypr Neon's streaks, leaves, petals) keep clear of in a
+/// window of `w` by `h`: the title and top bars, the rail, and the text. Home's hero text sits in
+/// the left column and its tabs below it, so the sky drifts through the top right between them;
+/// every other page is text from the top bar down.
+pub fn keep_clear(w: f32, h: f32, home: bool) -> rain::Keep {
+    const TOP: f32 = 32. + MARGIN + theme::TOPBAR;
+    const HERO: f32 = 400.;
+    const HERO_WIDTH: f32 = 640.;
+    let left = MARGIN + RAIL;
+    let body = if home { HERO } else { TOP };
+    rain::Keep([
+        [0., 0., w, TOP],
+        [0., 0., left, h],
+        [left, TOP, HERO_WIDTH.min(w - left), (HERO - TOP).max(0.)],
+        [left, body, w - left, (h - body).max(0.)],
+        // The hero's right column: its version and What's new buttons, the invite-code field.
+        [(w - 360.).max(left), TOP, 360., (HERO - TOP).max(0.)],
+    ])
+}
+
+/// How the rail opens and shuts: quick, settling from a little past its width.
+const RAIL_MOTION: horizon_theme::Motion = horizon_theme::Motion {
+    name: "rail",
+    ms: 320,
+    curve: [0.22, 0.9, 0.3, 1.08],
+};
+
+/// The rail's state: whether the pointer is on it, and where its last opening or shutting began.
+#[derive(Default)]
+pub struct Rail {
+    pub hovered: bool,
+    open: bool,
+    since: Option<Instant>,
+    from: f32,
+    at: f32,
+    /// The instance list's scroll, for the cue that more rows sit below.
+    list: gpui::ScrollHandle,
+}
+
+impl Rail {
+    /// How far open the rail is, 0 to 1 (a little past 1 as it settles). `pinned`: something it
+    /// opened is still open (a row's menu), so it stays open without the pointer. Frames are asked
+    /// for only while it moves; under reduced motion it jumps.
+    pub fn progress(&mut self, window: &mut Window, pinned: bool) -> f32 {
+        // `HORIZON_LAUNCHER_RAIL_OPEN=1` holds it open, for screenshots.
+        static HELD: std::sync::LazyLock<bool> =
+            std::sync::LazyLock::new(|| std::env::var_os("HORIZON_LAUNCHER_RAIL_OPEN").is_some());
+        let want = self.hovered || pinned || *HELD;
+        if want != self.open {
+            self.open = want;
+            self.from = self.at;
+            self.since = Some(Instant::now());
+        }
+        let to = if want { 1. } else { 0. };
+        let t = match self.since {
+            Some(since) if !crate::motion::still() => {
+                since.elapsed().as_secs_f32() / RAIL_MOTION.secs()
+            }
+            _ => 1.,
+        };
+        if t >= 1. {
+            self.since = None;
+            self.at = to;
+            return to;
+        }
+        self.at = self.from + (to - self.from) * RAIL_MOTION.ease(t);
+        window.request_animation_frame();
+        self.at
+    }
+}
 
 /// The ⋮ menu of a sidebar row while open: whose, and whether Delete… was pressed once.
 #[derive(Clone, Default)]
@@ -65,6 +138,16 @@ impl Launcher {
                         .rounded(r)
                         .into_any_element();
                 }
+            }
+            // A Horizon instance with no icon of its own: its initial on a colour of the
+            // picker's, the same each time for the same instance, so several read apart on
+            // the rail. Java and modded ones keep their game's or loader's mark.
+            None if i.java.is_none() && i.kind != InstanceKind::Port => {
+                let hash =
+                    i.id.bytes()
+                        .fold(0u32, |h, b| h.wrapping_mul(31).wrapping_add(u32::from(b)));
+                let colours = crate::glass_instance::COLOURS;
+                colour = colours[hash as usize % colours.len()];
             }
             None => {
                 if let Some(mark) = self.instance_mark(i, size) {
@@ -147,7 +230,14 @@ impl Launcher {
     }
 
     /// The instances by group (`sections` in the mockup): those without a group first.
-    fn glass_instances(&mut self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    /// `open`: the rail shows names (else icons alone, the name on hover); `label`: how far the
+    /// names have faded in.
+    fn glass_instances(
+        &mut self,
+        open: bool,
+        label: f32,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
         let t = self.theme;
         let selected = self.selected_instance().map(|i| i.id.clone());
         let on_packs = self.page == Page::Mods && self.mods.on_modpacks();
@@ -158,16 +248,18 @@ impl Launcher {
             out.push(list.into_any_element());
             div().flex().flex_col().gap(px(4.))
         };
-        for i in self.instances.list.clone() {
+        for (order, i) in self.instances.list.clone().into_iter().enumerate() {
             if i.group != group {
                 list = flush(list, &mut out);
                 group = i.group.clone();
-                if let Some(g) = &group {
+                if let Some(g) = group.as_ref().filter(|_| open) {
                     out.push(
                         ui::text(12., FontWeight::MEDIUM, ink::DIM)
                             .px(px(8.))
                             .pt(px(16.))
                             .pb(px(6.))
+                            .opacity(label)
+                            .whitespace_nowrap()
                             .child(g.clone())
                             .into_any_element(),
                     );
@@ -175,6 +267,16 @@ impl Launcher {
             }
             // As in the mockup, the chosen instance stays marked on every page, unless a ported
             // pack's page is open: that row is the one shown then.
+            let room_key = SharedString::from(format!("rail-name-{}", i.id));
+            let cut = ui::cut(
+                cx,
+                &self.rooms,
+                &room_key,
+                &i.name,
+                horizon_theme::glass::FONT,
+                14.,
+                FontWeight::SEMIBOLD,
+            );
             let current = match i.kind {
                 InstanceKind::Default | InstanceKind::Own => {
                     !(on_packs && self.pack_open.is_some()) && selected.as_ref() == Some(&i.id)
@@ -187,7 +289,7 @@ impl Launcher {
             let state = self.row_state(&i);
             let icon = self.glass_instance_icon(&i, 38.);
             let clicked = i.clone();
-            let open = self
+            let menu_open = self
                 .row_menu
                 .open
                 .as_ref()
@@ -209,7 +311,7 @@ impl Launcher {
                         32.,
                         18.,
                         radius::SMALL,
-                        open,
+                        menu_open,
                         &t,
                     )
                     .on_click(cx.listener(
@@ -223,77 +325,122 @@ impl Launcher {
                         },
                     )),
                 );
-            list = list.child(
+            list = list.child(crate::motion::enter(
+                ElementId::named_usize(format!("side-enter-{}", i.id), 0),
+                order,
                 div()
                     .relative()
                     .child(measure(&self.row_menu.rows, i.id.clone()))
                     .child(
-                        ui::row(format!("side-instance-{}", i.id), current, 40., &t)
-                            .child(div().relative().flex_none().child(icon))
-                            .child(ui::row_text(i.name.clone(), state))
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                match clicked.kind {
-                                    InstanceKind::Default | InstanceKind::Own => {
-                                        this.select_instance(&clicked);
-                                        this.go(Page::Play);
-                                    }
-                                    InstanceKind::Port => {
-                                        this.show_modpack(Some(clicked.id["port:".len()..].into()))
-                                    }
-                                    InstanceKind::Pack => this.show_modpack(None),
+                        ui::row(
+                            format!("side-instance-{}", i.id),
+                            current,
+                            if open { 40. } else { 8. },
+                            &t,
+                        )
+                        .child(div().relative().flex_none().child(icon))
+                        .child(
+                            ui::row_text(i.name.clone(), state)
+                                .overflow_hidden()
+                                .opacity(label)
+                                .child(ui::room(&self.rooms, room_key.clone())),
+                        )
+                        // Narrow, icons alone; open, a name too long for the row is cut: the full
+                        // name on hover either way.
+                        .when(!open || cut, |d| d.tooltip(ui::tip(i.name.clone())))
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            match clicked.kind {
+                                InstanceKind::Default | InstanceKind::Own => {
+                                    this.select_instance(&clicked);
+                                    this.go(Page::Play);
                                 }
-                                cx.notify();
-                            }))
-                            // The ⋮ menu, from a right click anywhere on the row.
-                            .on_mouse_down(
-                                gpui::MouseButton::Right,
-                                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
-                                    // The open menu's mouse-down-out already closed it on this
-                                    // press: reopening here would make the toggle a no-op.
-                                    if this.menu_closed_at.take() == Some(event.position) {
-                                        cx.notify();
-                                        return;
-                                    }
-                                    this.row_menu.open =
-                                        row_menu_after_press(this.row_menu.open.take(), &right_id);
+                                InstanceKind::Port => {
+                                    this.show_modpack(Some(clicked.id["port:".len()..].into()))
+                                }
+                                InstanceKind::Pack => this.show_modpack(None),
+                            }
+                            cx.notify();
+                        }))
+                        // The ⋮ menu, from a right click anywhere on the row.
+                        .on_mouse_down(
+                            gpui::MouseButton::Right,
+                            cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                                // The open menu's mouse-down-out already closed it on this
+                                // press: reopening here would make the toggle a no-op.
+                                if this.menu_closed_at.take() == Some(event.position) {
                                     cx.notify();
-                                }),
-                            ),
+                                    return;
+                                }
+                                this.row_menu.open =
+                                    row_menu_after_press(this.row_menu.open.take(), &right_id);
+                                cx.notify();
+                            }),
+                        ),
                     )
-                    .child(more),
-            );
+                    .when(open, |d| d.child(more)),
+            ));
         }
         out.push(list.into_any_element());
         out
     }
 
-    /// The glass sidebar: a plate 248 wide, 14 from the window's edges.
-    pub(super) fn glass_sidebar(&mut self, cx: &mut Context<Self>) -> Div {
+    /// The rail: a strip of instance icons that opens into names, states and links while the
+    /// pointer is on it (or one of its menus is open). It opens over the page, which keeps the
+    /// collapsed rail's room, so the page never moves or squeezes under the pointer. Its foot keeps the project's links, Settings and the version.
+    pub(super) fn glass_rail(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         let t = self.theme;
+        let soft = self.look.accent_soft;
         self.load_packs();
-        let add = ui::icon_button(
-            "add-instance",
-            "plus-sign",
-            36.,
-            16.,
-            radius::CONTROL,
-            false,
+        let pinned = self.row_menu.open.is_some();
+        let p = self.rail.progress(window, pinned);
+        let open = p > 0.5;
+        // Names and lines fade in over the second half of the opening, as the width arrives.
+        let label = ((p - 0.35) / 0.65).clamp(0., 1.);
+        let fade = move |d: Div| d.min_w_0().overflow_hidden().opacity(label);
+
+        // Add instance: the accent's outline, not the sun gradient, so Play stays the one bright
+        // button on Home.
+        let add = keyboard(
+            track_hover(
+                div()
+                    .id("add-instance")
+                    .relative()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .gap(px(12.))
+                    .w_full()
+                    .h(px(42.))
+                    .px(px(17.5))
+                    .rounded(px(radius::ROW))
+                    .bg(ui::color(self.look.accent).opacity(0.08))
+                    .border_1()
+                    .border_color(ui::color(self.look.accent).opacity(0.5))
+                    .hover(|s| {
+                        s.bg(ui::color(self.look.accent).opacity(0.16))
+                            .border_color(ui::color(self.look.accent).opacity(0.8))
+                    })
+                    .cursor_pointer()
+                    .child(ui::icon("plus-sign", 19., ui::color(soft)))
+                    .child(
+                        fade(ui::text(14., FontWeight::SEMIBOLD, ink::FULL))
+                            .whitespace_nowrap()
+                            .child(tr("Add instance")),
+                    )
+                    .when(!open, |d| d.tooltip(ui::tip(tr("Add instance"))))
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.open_instance_dialog(None);
+                        cx.notify();
+                    })),
+                "add-instance".into(),
+            ),
             &t,
-        )
-        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-            this.open_instance_dialog(None);
-            cx.notify();
-        }));
-        let header = div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .justify_between()
-            .px(px(16.))
-            .pt(px(16.))
-            .pb(px(8.))
-            .child(ui::text(13., FontWeight::MEDIUM, ink::NOTE).child(tr("Instances")))
-            .child(add);
+        );
+
         let mut list = div()
             .id("side-list")
             .flex()
@@ -301,11 +448,10 @@ impl Launcher {
             .flex_1()
             .min_h_0()
             .overflow_y_scroll()
-            .px(px(10.))
-            .children(self.glass_instances(cx));
+            .track_scroll(&self.rail.list)
+            .children(self.glass_instances(open, label, cx));
 
-        // The player's hosted servers: not in the mockup (its Servers page lists them), kept as
-        // one more section in its pattern.
+        // The player's hosted servers, one more section under the instances.
         let servers: Vec<_> = self
             .servers
             .sidebar_list()
@@ -313,20 +459,26 @@ impl Launcher {
             .unwrap_or_else(|| self.side_servers.clone());
         if !servers.is_empty() {
             list = list.child(
-                ui::text(12., FontWeight::MEDIUM, ink::DIM)
+                div()
+                    .h(px(22.))
+                    .flex()
+                    .items_end()
                     .px(px(8.))
-                    .pt(px(16.))
-                    .pb(px(6.))
-                    .child(tr("Servers")),
+                    .pb(px(4.))
+                    .child(
+                        fade(ui::text(12., FontWeight::MEDIUM, ink::DIM))
+                            .whitespace_nowrap()
+                            .child(tr("Servers")),
+                    ),
             );
         }
-        let mut server_rows = div().flex().flex_col().gap(px(4.));
+        let mut server_rows = div().flex().flex_col().gap(px(2.));
         for e in &servers {
             let up = self.servers.is_up(&e.dir);
-            let open = self.page == Page::Servers && self.servers.open.as_ref() == Some(&e.dir);
+            let shown = self.page == Page::Servers && self.servers.open.as_ref() == Some(&e.dir);
             let dir = e.dir.clone();
             server_rows = server_rows.child(
-                ui::row(format!("side-server-{}", e.dir.display()), open, 8., &t)
+                ui::row(format!("side-server-{}", e.dir.display()), shown, 8., &t)
                     .child(
                         div()
                             .relative()
@@ -339,14 +491,15 @@ impl Launcher {
                             .bg(white(fill::BUTTON))
                             .child(ui::icon("computer-terminal-01", 18., white(ink::STRONG))),
                     )
-                    .child(ui::row_text(
+                    .child(fade(ui::row_text(
                         e.name.clone(),
                         if up {
                             (Tone::Live, tr("Running").into())
                         } else {
                             (Tone::Off, tr("Stopped").into())
                         },
-                    ))
+                    )))
+                    .when(!open, |d| d.tooltip(ui::tip(e.name.clone())))
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.open_server(dir.clone());
                         this.go(Page::Servers);
@@ -355,6 +508,75 @@ impl Launcher {
             );
         }
         let list = list.child(server_rows);
+        // More rows than the rail shows: the web links fold into one row, and while rows sit
+        // below the list's foot a fade and a "More" pill say so; the pill scrolls to them.
+        let rows = self.instances.list.len() + servers.len();
+        let overflows = 52. * rows as f32 > f32::from(window.viewport_size().height) - 420.;
+        let scroll = self.rail.list.clone();
+        // Before the list's first layout the handle knows no height: the estimate stands in.
+        let below = match scroll.max_offset().y {
+            max if max == px(0.) => overflows,
+            max => max + scroll.offset().y > px(2.),
+        };
+        let more = div()
+            .id("rail-more")
+            .flex()
+            .flex_none()
+            .items_center()
+            .justify_center()
+            .gap(px(4.))
+            .h(px(24.))
+            .px(px(10.))
+            .rounded_full()
+            .border_1()
+            .border_color(white(ui::edge::STRONG))
+            .bg(white(fill::ACTIVE))
+            .cursor_pointer()
+            .child(ui::icon("arrow-down-01", 14., white(ink::STRONG)))
+            .when(open, |d| {
+                d.child(
+                    fade(ui::text(12., FontWeight::MEDIUM, ink::STRONG))
+                        .whitespace_nowrap()
+                        .child(tr("More")),
+                )
+            })
+            .when(!open, |d| d.tooltip(ui::tip(tr("More instances below"))))
+            .on_click(move |_, _, _| scroll.scroll_to_bottom());
+        // The fade sits over the list's last rows; the pill gets its own line under them, so it
+        // never covers a tile.
+        let list = div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .gap(px(6.))
+            .child(
+                div()
+                    .relative()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .child(list)
+                    .when(below, |d| {
+                        d.child(
+                            div()
+                                .absolute()
+                                .left_0()
+                                .right_0()
+                                .bottom_0()
+                                .h(px(28.))
+                                .bg(gpui::linear_gradient(
+                                    180.,
+                                    gpui::linear_color_stop(gpui::black().opacity(0.), 0.),
+                                    gpui::linear_color_stop(gpui::black().opacity(0.3), 1.),
+                                )),
+                        )
+                    }),
+            )
+            .when(below, |d| {
+                d.child(div().flex().flex_none().justify_center().child(more))
+            });
 
         let mut foot = div()
             .flex()
@@ -372,30 +594,37 @@ impl Launcher {
         );
 
         crate::glass::plate(radius::PANEL)
+            .id("rail")
             .flex()
             .flex_col()
             .flex_none()
-            .w(px(SIDEBAR))
+            .w(px(RAIL_OPEN))
             .my(px(MARGIN))
             .ml(px(MARGIN))
             .overflow_hidden()
-            .child(header.relative())
+            .child(add.relative())
             .child(list.relative())
             .child(foot.relative())
     }
 
     /// The glass top bar: the pages in a glass strip, then Settings (`px-8 pt-3.5`).
-    pub(super) fn glass_topbar(&mut self, cx: &mut Context<Self>) -> Div {
+    pub(super) fn glass_topbar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
-        let wide = self.window_width >= crate::glass_home::TOP_BAR_WIDE;
         let compact = self.window_width < crate::glass_home::COMPACT;
+        let mark = div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .justify_center()
+            .w(px(RAIL))
+            .child(self.edition_switch(cx));
         let mut tabs = div()
             .flex()
             .items_center()
             .gap(px(if compact { 2. } else { 4. }))
             .min_w_0();
         for (page, label, _) in Page::in_top_bar() {
-            let mut item = ui::tab(format!("nav-{label}"), tr(label), self.page == page, &t);
+            let mut item = ui::nav_tab(format!("nav-{label}"), tr(label), self.page == page, &t);
             if compact {
                 item = item.px(px(8.));
             }
@@ -406,15 +635,8 @@ impl Launcher {
                 })),
             );
         }
-        let strip = crate::glass::plate(radius::LARGE)
-            .p(px(4.))
-            .min_w_0()
-            .when(wide, |d| d.flex_none())
-            .when(!wide, |d| d.flex_shrink(1.).overflow_hidden())
-            .child(tabs.id("nav-pages").relative().when(!wide, |d| {
-                d.overflow_x_scroll()
-                    .on_scroll(|_, _, cx| cx.stop_propagation())
-            }));
+        let performance = self.settings.performance();
+        let strip = self.nav_strip.render(tabs, &t, performance, window);
 
         let settings = ui::icon_button(
             "nav-Settings",
@@ -433,6 +655,65 @@ impl Launcher {
             });
             cx.notify();
         }));
+        // Search: the palette (⌘K or Ctrl+K anywhere), as a field-shaped button.
+        let sid = SharedString::from("topbar-search");
+        let key: &str = if cfg!(target_os = "macos") {
+            "⌘K"
+        } else {
+            tr("Ctrl K")
+        };
+        let search = keyboard(
+            track_hover(
+                div()
+                    .id(sid.clone())
+                    .relative()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .gap(px(10.))
+                    .h(px(38.))
+                    .w(px(if compact { 38. } else { 230. }))
+                    .when(compact, |d| d.justify_center())
+                    .when(!compact, |d| d.px(px(12.)))
+                    .rounded(px(radius::CONTROL))
+                    .bg(white(fill::FIELD))
+                    .border_1()
+                    .border_color(white(ui::edge::REST))
+                    .cursor_pointer()
+                    .child(ui::hover_edge(&sid, radius::CONTROL, fill::HOVER, true))
+                    .child(ui::icon("search-01", 16., white(ink::QUIET)).relative())
+                    .when(!compact, |d| {
+                        d.child(
+                            ui::text(13.5, FontWeight::NORMAL, ink::QUIET)
+                                .relative()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .child(tr("Search…")),
+                        )
+                        .child(
+                            ui::text(11.5, FontWeight::MEDIUM, ink::DIM)
+                                .relative()
+                                .flex()
+                                .flex_none()
+                                .items_center()
+                                .h(px(20.))
+                                .px(px(6.))
+                                .rounded(px(5.))
+                                .border_1()
+                                .border_color(white(ui::edge::REST))
+                                .child(key.to_string()),
+                        )
+                    })
+                    .when(compact, |d| d.tooltip(ui::tip(tr("Search…"))))
+                    .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                        this.palette_toggle(window, cx);
+                        cx.notify();
+                    })),
+                sid,
+            ),
+            &t,
+        );
         // The last native build's log (not in the mockup, kept), as a quiet button.
         let build_log = self.native_log.available.then(|| {
             keyboard(
@@ -454,13 +735,19 @@ impl Launcher {
                 &t,
             )
         });
+
+        // The build log isn't a top-bar button: it pushed the pages off the bar during a build.
+        // It opens from the build card and from each mod's menu.
         div()
             .flex()
             .flex_none()
             .items_center()
             .gap(px(12.))
-            .px(px(32.))
-            .pt(px(14.))
+            .h(px(64.))
+            .pl(px(MARGIN))
+            .pr(px(MARGIN + 8.))
+            .pt(px(4.))
+            .child(mark)
             .child(strip)
             .children(self.toast_in_topbar())
             .child(
@@ -469,7 +756,8 @@ impl Launcher {
                     .flex()
                     .flex_none()
                     .items_center()
-                    .gap(px(6.))
+                    .gap(px(8.))
+                    .child(search)
                     .children(build_log)
                     .child(settings),
             )
@@ -548,7 +836,7 @@ impl Launcher {
                 item("edit", "pencil-edit-02", edit_label.into()).on_click(cx.listener(
                     move |this, _: &ClickEvent, _, cx| {
                         this.row_menu.open = None;
-                        this.open_instance_dialog(Some(edit.clone()));
+                        this.open_instance_sheet(edit.clone(), glass_sheet::SheetTab::General);
                         cx.notify();
                     },
                 )),
@@ -576,9 +864,7 @@ impl Launcher {
                 item("export", "upload-04", export_label.into()).on_click(cx.listener(
                     move |this, _: &ClickEvent, _, cx| {
                         pick(this, &export);
-                        if this.export.is_none() {
-                            this.toggle_export();
-                        }
+                        this.open_instance_sheet(export.clone(), glass_sheet::SheetTab::Storage);
                         cx.notify();
                     },
                 )),
@@ -587,10 +873,7 @@ impl Launcher {
                 item("launch", "sliders-horizontal", launch_label.into()).on_click(cx.listener(
                     move |this, _: &ClickEvent, _, cx| {
                         pick(this, &launch);
-                        this.home_tab = home_tabs::HomeTab::Overview;
-                        // A panel left open for another instance must not turn this into Close.
-                        this.launch = None;
-                        this.toggle_launch();
+                        this.open_instance_sheet(launch.clone(), glass_sheet::SheetTab::Launch);
                         cx.notify();
                     },
                 )),

@@ -7,7 +7,11 @@ pub mod data_location;
 pub mod datapacks;
 pub mod desktop;
 pub mod desktop_seams;
+pub mod developer_install;
+pub mod developer_offline;
+pub(crate) mod download_retry;
 pub mod downloads;
+pub mod effects;
 pub mod export;
 #[cfg(unix)]
 pub mod game_app;
@@ -32,12 +36,14 @@ mod native_cache;
 pub mod native_fit;
 pub mod native_mods;
 pub mod native_status;
+pub mod nightly;
 pub mod other_launchers;
 pub mod packs;
 pub mod pictures;
 pub mod process;
 pub mod proxy;
 pub mod relocation;
+mod run_leases;
 pub mod rust_toolchain;
 pub mod screenshots;
 pub mod secrets_file;
@@ -53,3 +59,14 @@ pub mod uninstall_aside;
 #[cfg(windows)]
 mod windows_runtime;
 pub mod worlds;
+
+pub mod jars;
+
+pub mod storage;
+
+pub mod cache_cleanup;
+
+pub mod bug_report;
+
+#[cfg(test)]
+mod test_support;
