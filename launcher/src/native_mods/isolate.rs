@@ -133,7 +133,6 @@ mod tests {
     /// a Horizon it doesn't fit: the build fails with the tool's diagnostic
     /// (which names the injection and the code) rather than leaving the mod out
     /// as "made for another Horizon version" (#13971).
-
     #[test]
     fn the_mods_needing_a_left_out_mod_go_too_but_not_optional_ones() {
         let root = super::super::tests::dir("isolate-deps");
