@@ -311,9 +311,6 @@ impl Launcher {
         }
         // What the game and the launcher kept, if the player allows it and there is a server.
         this.mod_preview_from_env();
-        telemetry::send_in_background();
-        telemetry::watch_playing(this.tx.clone());
-        telemetry::watch_official(this.tx.clone());
         this
     }
 

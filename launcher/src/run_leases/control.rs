@@ -29,5 +29,4 @@ pub fn startup_cleanup() {
     if let Err(error) = super::publish_existing() {
         eprintln!("{}", crate::native_mods::cache_error(error));
     }
-    backend::cleanup_launcher_updates();
 }

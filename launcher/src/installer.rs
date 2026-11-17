@@ -188,8 +188,7 @@ fn same_path(a: &Path, b: &Path) -> bool {
 }
 
 /// Puts `src` at `dest`: a running `dest` can't be
-/// written or deleted but can be renamed, so it steps aside and `remove_replaced_binaries`
-/// clears it at the next start.
+/// written or deleted but can be renamed, so it steps aside for the next launch to clean up.
 fn place(src: &Path, dest: &Path) -> io::Result<()> {
     let dir = dest
         .parent()

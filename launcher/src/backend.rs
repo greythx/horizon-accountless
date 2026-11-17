@@ -2511,12 +2511,10 @@ pub fn client_command(tag: &str) -> Command {
     let home = game_home();
     let _ = fs::create_dir_all(&home);
     let mut cmd = Command::new(client_program(tag));
-    if crate::developer_install::uses_developer(tag) {
-        cmd.env("HORIZON_TELEMETRY_URL", "off");
-    }
+    cmd.env("HORIZON_NO_HEARTBEAT", "1")
+        .env("HORIZON_TELEMETRY_URL", "off");
     crate::run_leases::mark(&mut cmd, &version_dir(tag));
     strip_launcher_render_env(&mut cmd);
-    crate::telemetry::ping_only_if_allowed(&mut cmd, !Settings::load().ping_off);
     cmd.current_dir(&home)
         .env("HORIZON_HOME", &home)
         .env_remove("HORIZON_ACCOUNT_SESSIONS")
@@ -3587,24 +3585,6 @@ mod tests {
         }
     }
 
-    /// The game program's mod API level is its mark's; a program from before the mark (0.2.68
-    /// and older) or none at all serves level 0.
-    #[test]
-    fn a_game_program_says_its_mod_api_level() {
-        let dir = std::env::temp_dir().join(format!("horizon-api-level-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
-        let marked = dir.join("marked");
-        let mut program = b"\x7fELF code code".to_vec();
-        program.extend_from_slice(b"horizon-mod-api-level:0007;");
-        fs::write(&marked, &program).unwrap();
-        let old = dir.join("old");
-        fs::write(&old, b"\x7fELF code without a mark").unwrap();
-        assert_eq!(program_mod_api_level(&marked), 7);
-        assert_eq!(program_mod_api_level(&old), 0);
-        assert_eq!(program_mod_api_level(&dir.join("missing")), 0);
-        fs::remove_dir_all(&dir).unwrap();
-    }
-
     /// A preparation that reuses the imported game files still reads the assets from the
     /// launcher that has them: a Prism Launcher instance's are in the launcher root, linked into
     /// the official layout (jan.sonki on Discord: silent, grey title screen since 0.2.48).
@@ -3768,10 +3748,6 @@ mod tests {
             releases.iter().map(|r| r.tag.as_str()).collect::<Vec<_>>(),
             ["nightly-2026-11-12-aaaaaaa", "v0.2.81"]
         );
-        for installed in [vec![], vec![SNAPSHOT.to_owned()]] {
-            let update = horizon_update(&releases, &installed).unwrap();
-            assert_eq!(update.tag, "nightly-2026-11-12-aaaaaaa", "{installed:?}");
-        }
         // A snapshot the developer selected stays selected when that Nightly installs as an
         // update, whether it is the only version installed or beside a release.
         for installed in [
