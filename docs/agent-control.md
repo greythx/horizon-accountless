@@ -19,12 +19,12 @@ The command lists are generated, so they can't drift:
 
 | Surface | Where | Transport |
 | --- | --- | --- |
-| Game control socket | `horizon-client --control` / `--control-socket PATH`, or Agent Control on in Horizon Settings > AI Agent (`crates/horizon-client/src/control.rs`; commands in `src/game/control.rs`, `agent.rs`, `ui_control.rs`, `saves_control.rs` and friends) | text line in, one JSON line out; Unix socket, or localhost TCP and a token where there is none |
+| Game control socket | `horizon-client --control` / `--control-socket PATH`, or Agent Control on in Horizon Settings > AI Agent (`crates/horizon-client/src/control.rs`; commands in `src/game/runtime/control.rs`, `agent.rs`, `ui_control.rs`, `saves_control.rs` and friends) | text line in, one JSON line out; Unix socket, or localhost TCP and a token where there is none |
 | `horizon-ctl` | `crates/horizon-client/src/bin/horizon-ctl/` | CLI over the socket; one table of commands (`commands.rs`) gives the help, the argument checks, the MCP tools and the reference |
 | `horizon-ctl mcp` | same | MCP over stdio, one tool per command of the table |
 | Launcher CLI | `launcher/src/cli.rs` | `horizon-launcher <command> [--json]` |
 | Launcher MCP | `launcher/src/mcp.rs`, `cli_tools.rs`, `game_tools.rs` | `horizon-launcher mcp` (stdio): every CLI command as a tool, the session tools, and the game's tools as `game_*` |
-| Connecting | `launcher/src/agents.rs`, `agents_page.rs`; `src/game/agent_settings.rs` | `horizon-launcher agent-config`; Settings > AI in the launcher; Horizon Settings > AI Agent in the game |
+| Connecting | `launcher/src/agents.rs`, `agents_page.rs`; `src/game/runtime/agent_settings.rs` | `horizon-launcher agent-config`; Settings > AI in the launcher; Horizon Settings > AI Agent in the game |
 | No AI | `crates/horizon-core/src/no_ai.rs` | `noAi:true` in `<game home>/horizon-extras.txt`, read by every surface |
 
 ## One MCP server for everything
@@ -108,6 +108,7 @@ passes on without checking it).
 | Game log, crash reports | Settings | yes | yes | `logs [--crash]` |
 | Mod browser: search, check, install, update, remove, list (mods, resource packs, modpacks) | Mods | yes | yes | `mods ...`; `mods_remove` needs `confirm` |
 | Modpacks: import, port, play, remove, list | Modpacks | yes | yes | `modpack ...`; `modpack_remove` needs `confirm` |
+| Bug report | (none) | yes | yes | `bug-report [--log]`; writes a local file; nothing is sent |
 | Launcher benchmark | (none) | yes | yes |  |
 | The game it started | (the game) | (horizon-ctl) | yes | `game_*` |
 | Connect an AI agent | Settings > AI | yes | (none) | `agent-config [--client] [--test]`; the agent is already connected, so there is no tool |
@@ -215,7 +216,7 @@ turn the switch off.
   input plays before and after it.
 - **Headless:** `horizon-ctl launch --headless` (`horizon-client --headless --control`) starts a
   game with no display, no window and no GPU: it runs where no display server is (an SSH session,
-  a server) and runs its own loop instead of winit's (`game/headless.rs`), one frame a tick. It
+  a server) and runs its own loop instead of winit's (`game/runtime/headless.rs`), one frame a tick. It
   plays through these commands only; commands that need the screen's pixels (`screenshot`, clicks
   at GUI points) answer with an error ([#4951](https://github.com/horizon-rust/horizon/issues/4951)).
 
@@ -262,16 +263,19 @@ turn the switch off.
   `confirm` and carries the MCP `destructiveHint`. In the game these are `world-delete`, `fill`
   and `setblock` (the table's `DESTRUCTIVE`); in the launcher, `remove`, `modpack remove`,
   `mods remove`, `servers forget`, `worlds delete`, `screenshots delete`, `packs remove`,
-`multiplayer remove`, `worlds datapack-remove` and `unshare-log` (`cli_tools::DESTRUCTIVE`).
+  `multiplayer remove`, `worlds datapack-remove` and `unshare-log` (`cli_tools::DESTRUCTIVE`).
   Without `confirm: true` the call is refused and the message says to ask the player. In the game
   CLI the flag is `--confirm`. The launcher CLI asks nothing: a person typing `remove` meant it.
 - **Ask before reaching out.** A command that sends data or reaches other people carries
   `openWorldHint`, and its description says "only when the player asks". In the game these are
   `connect`, `lan`, `friends`, `chat` and `command`; in the launcher, `servers create` and
-  `share-log`. `play`'s `server` argument says the same.
+  `share-log`. `play`'s `server` argument says the same. Bug and benchmark reports stay local;
+  there is no telemetry or data collection switch ([Horizon sends nothing](telemetry.md)).
 - **No secrets.** No surface returns tokens or invite secrets the player didn't ask to share:
   - `servers` reads names and addresses only;
-  - the Tailscale access token is never printed, only sent to Tailscale.
+  - the Tailscale access token is never printed, only sent to Tailscale;
+  - there is no session file for the game to read: this fork signs nothing in, so nothing of
+    yours identifies you to a server.
 - **Vanilla behaviour untouched.** Control code reads state and synthesizes the input events a
   player produces; registering widgets for the tree draws nothing. A change to game files runs
   `tools/parity.py --changed origin/main`.

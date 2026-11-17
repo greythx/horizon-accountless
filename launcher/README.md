@@ -250,6 +250,17 @@ page `servers.json` (the list), `servers/<name>/` (the servers created there) an
   launcher's own arguments, kept as `game_args` in `settings.json`, and apply the next time the
   game starts. `horizon-launcher game-args "<line>"` sets them too, and `play --arg <ARG>` passes
   one for a single run.
+- **Wasm compile budget** (game runtime, not a launcher preference):
+  `wasm.compile_timeout_secs:120` in the client's `options.txt` (the resolved
+  `--player-dir` when supplied, otherwise the selected instance) allows 120 seconds
+  per uncached module on the Unix child-compiler path. Remove the line for the
+  `5 + 300 / available_threads` seconds default. Invalid values publish a refusal
+  and exclude the wasm package's code and content rather than silently defaulting.
+  An unavailable/untrusted Unix cache or failed compiler refuses compilation instead
+  of dropping the deadline. Dedicated servers use
+  `"wasm.compile_timeout_secs" = "120"` under `server.toml`'s `[properties]`.
+  Restart the game/server after editing. Windows currently compiles in process
+  without this child deadline; see the [runtime reference](../docs/modding/src/how-to/wasm-mods.md#compilation-time-setting).
 - **Proxy**: when the internet here needs one (a school's, an office's, a country where a host is
   unreachable), Settings' Proxy takes the `http://host:port` or `socks5://host:port` address your
   proxy app listens on, and
@@ -263,6 +274,10 @@ page `servers.json` (the list), `servers/<name>/` (the servers created there) an
 
 Long pages, dialogs, the server console and data previews have a visible scrollbar when
 their content overflows. Drag the thumb or click the track to navigate without a mouse wheel.
+When the top bar's page tabs overflow, an arrow on a fading edge shows each side with more tabs
+(`src/nav_strip.rs`); the arrows go at the ends and when all tabs fit. They fade in and out over
+150 ms, and a click scrolls three quarters of the strip over 240 ms; another click goes on from where
+that one is headed, and the wheel stops it. Performance mode and reduced motion make both instant.
 
 Pages and Home's landscape fill the window as it resizes. The title bar is transparent over the
 launcher on every platform: Windows keeps native dragging, resizing, Snap, minimize,
@@ -284,7 +299,15 @@ asking, then revalidated with its ETag. When GitHub answers with its rate limit,
 Horizon's releases are read through upstream's read-only mirror
 (`https://mcp.playhorizon.dev/github/public`; `HORIZON_GITHUB_MIRROR` replaces it, an empty value
 turns it off); when both fail the last saved answer is used, else the error names both. The release
-files themselves come from their download links, which that limit doesn't cover.
+files themselves come from their download links, which that limit doesn't cover. The launcher's
+releases come from the fork's own repository; the game's files come from your own Minecraft install.
+
+On Linux the release also comes as an AppImage, `horizon-launcher-linux-x86_64.AppImage`: one file
+to download, make executable and run, with no installation and no `libfuse2` (its runtime mounts
+the image where FUSE 2 is there and unpacks it where it is not). It is the same binary as the
+`.tar.gz`, with the libraries GPUI needs beside it; glibc, the graphics drivers and the session's
+D-Bus stay the machine's, so it needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 and
+newer).
 
 On Linux a release build that starts writes its applications-menu entry only when there is
 none, or when the program the entry starts (its `TryExec`, else its `Exec`) no longer exists.
@@ -460,6 +483,22 @@ On Windows, `cargo test --bin horizon-launcher desktop_list_renders_the_viewport
 ## Building
 
     cargo build --release
+
+A debug build (`cargo build`) also supports Windows' default 1 MiB process-entry stack.
+On Windows, the entry thread starts and joins a launcher thread with a 16 MiB stack before
+any CLI dispatch or GUI initialization. That thread owns OLE initialization, GPUI's windows
+and its message loop together; Linux and macOS still run on the original main thread.
+CLI arguments, terminal pipes and command exit codes are unchanged.
+
+The Windows daily subprocess tests use the debug binary. To exercise real CLI startup with
+a deterministic 1 MiB entry stack, including persisted settings and failure exit codes:
+
+    cargo test --locked --test startup cli_settings_work_with_one_mib_process_stack -- --ignored --exact
+
+That test uses fresh homes and a private copy of the executable with only its PE stack reserve
+changed; it needs no desktop. The ignored
+`hardware_probes_run_hidden_after_the_first_frame` test additionally checks real GUI startup
+on an interactive Windows desktop with a graphics adapter.
 
 On NixOS, `nix-shell` in this folder provides the libraries GPUI links to (Wayland, X11,
 xkbcommon, Vulkan, fontconfig) and the ALSA and libudev files a native mod build looks up, so

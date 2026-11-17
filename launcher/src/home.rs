@@ -121,7 +121,12 @@ impl Launcher {
             .child(label(
                 tr(if running { "Running" } else { "Play" }).to_string(),
             ));
-        match play_press(ready, self.preparing || running) {
+        match play_press(
+            ready,
+            // No account verdict in this fork: an absent owner never disables Play.
+            Some(true),
+            self.preparing || running,
+        ) {
             PlayPress::Nothing => play = disabled(play),
             PlayPress::Play => {
                 play = play.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
@@ -133,8 +138,10 @@ impl Launcher {
             PlayPress::PrepareThenPlay => {
                 play = play.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                     this.picker.open = false;
-                    this.play_when_prepared = this.selected().cloned();
-                    this.starting_instance = this.selected_instance().map(|i| i.id.clone());
+                    this.play_when_prepared = this
+                        .selected()
+                        .cloned()
+                        .zip(this.selected_instance().map(|i| i.id.clone()));
                     this.prepare();
                     cx.notify();
                 }))

@@ -17,6 +17,21 @@ mod glass_server_dialog;
 #[path = "glass_servers.rs"]
 mod glass_servers;
 use glass_servers::glass_setting_row;
+#[path = "servers_format.rs"]
+mod servers_format;
+use servers_format::{backup_label, bytes, uptime};
+
+/// One consent boundary for every launcher-managed start/restart route.
+fn run_managed_server(
+    tx: &std::sync::mpsc::Sender<backend::Msg>,
+    dir: &Path,
+    args: &[&str],
+    log: &dyn Fn(String),
+) -> Result<(), Problem> {
+    crate::jar_launch::with_consent(tx, |permission| {
+        servers::run_managed(dir, args, log, permission)
+    })
+}
 
 /// The servers this launcher started in this session, stopped when it closes unless they run as a
 /// service (`stop_on_quit`).
@@ -62,10 +77,14 @@ pub(super) enum Field {
     DeleteServer,
     /// Settings' accent as hex (`themes_page.rs`).
     AccentHex,
+    /// A Java instance's own JVM arguments and window size (the instance sheet's Launch).
+    JavaArgs,
+    WindowWidth,
+    WindowHeight,
 }
 
 impl Field {
-    const ALL: [Field; 23] = [
+    const ALL: [Field; 26] = [
         Field::Name,
         Field::Seed,
         Field::Players,
@@ -89,6 +108,9 @@ impl Field {
         Field::MemoryLimit,
         Field::DeleteServer,
         Field::AccentHex,
+        Field::JavaArgs,
+        Field::WindowWidth,
+        Field::WindowHeight,
     ];
 }
 
@@ -339,9 +361,11 @@ impl Servers {
         if let Some(h) = self.focus_soon.take().and_then(|f| self.focus.get(&f)) {
             window.focus(h, cx);
         }
-        self.focused = Field::ALL
-            .into_iter()
-            .find(|f| self.focus.get(f).is_some_and(|h| h.is_focused(window)));
+        self.focused = self
+            .focus
+            .iter()
+            .find(|(_, h)| h.is_focused(window))
+            .map(|(f, _)| *f);
         if self.focused.is_some() && self.focused != self.selected {
             self.selected = None;
         }
@@ -471,9 +495,19 @@ impl Launcher {
         let Some(dir) = self.servers.open.clone() else {
             return;
         };
+        let tx = self.tx.clone();
         self.server_job(label.to_string(), move |log| {
             let args: Vec<&str> = args.iter().map(String::as_str).collect();
-            servers::run_streamed(&dir, &args, log).map(|_| String::new())
+            let result = match args.first().copied() {
+                Some("start" | "restart") => {
+                    if args[0] == "start" {
+                        log(tr("A new world takes a minute the first time").into());
+                    }
+                    run_managed_server(&tx, &dir, &args, log)
+                }
+                _ => servers::run_streamed(&dir, &args, log),
+            };
+            result.map(|_| String::new())
         });
     }
 
@@ -828,6 +862,7 @@ impl Launcher {
         };
         STARTED_HERE.lock().unwrap().push(dir.clone());
         self.servers.restart_needed.clear();
+        let tx = self.tx.clone();
         self.server_job("Starting", move |log| {
             // A server registered before this build may still carry online mode; this fork hosts
             // offline servers only. A start that can't make sure of that is refused, not done.
@@ -847,7 +882,7 @@ impl Launcher {
                 }
             }
             log("A new world takes a minute the first time".into());
-            servers::run_streamed(&dir, &["start"], log).map(|_| String::new())
+            run_managed_server(&tx, &dir, &["start"], log).map(|_| String::new())
         });
     }
 
@@ -871,6 +906,7 @@ impl Launcher {
         let Some(dir) = self.servers.open.clone() else {
             return;
         };
+        let tx = self.tx.clone();
         self.server_job("Restarting", move |log| {
             // The running server's API first; when it can't be reached or refuses, the CLI,
             // whose error is the job's.
@@ -879,7 +915,7 @@ impl Launcher {
             if via_api {
                 return Ok(String::new());
             }
-            servers::run_streamed(&dir, &["restart"], log).map(|_| String::new())
+            run_managed_server(&tx, &dir, &["restart"], log).map(|_| String::new())
         });
     }
 
@@ -1072,6 +1108,7 @@ impl Launcher {
                         f,
                         Field::InstanceModsFilter
                             | Field::ConsoleSearch
+                            | Field::WardrobeSearch
                             | Field::Motd
                             | Field::Port
                             | Field::Token
@@ -1128,6 +1165,7 @@ impl Launcher {
                             f,
                             Field::InstanceModsFilter
                                 | Field::ConsoleSearch
+                                | Field::WardrobeSearch
                                 | Field::AccentHex
                                 | Field::Motd
                                 | Field::Port
@@ -1261,6 +1299,10 @@ impl Launcher {
             | Field::InstanceVersion
             | Field::InstanceModsFilter
             | Field::ConsoleSearch
+            | Field::WardrobeSearch
+            | Field::JavaArgs
+            | Field::WindowWidth
+            | Field::WindowHeight
             | Field::DeleteServer
             | Field::AccentHex => {}
             Field::PreLaunch | Field::Wrapper | Field::LaunchEnv | Field::PostExit => {
@@ -1536,10 +1578,10 @@ impl Launcher {
         let mut n = notice(p.message.clone(), &t).items_center();
         if let Some(fix) = p.fix {
             let label = match &fix {
-                Fix::UsePort(port) => format!("Use port {port}"),
-                Fix::Prepare => "Prepare the game files".into(),
-                Fix::AgreeEula => "I agree to the EULA".into(),
-                Fix::ShowLog => "Open the logs".into(),
+                Fix::UsePort(port) => trf("Use port {port}", &[("port", &port.to_string())]),
+                Fix::Prepare => tr("Prepare the game files").into(),
+                Fix::AgreeEula => tr("I agree to the EULA").into(),
+                Fix::ShowLog => tr("Open the logs").into(),
             };
             n = n.child(
                 button("problem-fix", label, Kind::Secondary, &t)
@@ -3046,7 +3088,9 @@ impl Launcher {
         } else if worlds.is_empty() {
             text(theme::CAPTION)
                 .text_color(t.muted)
-                .child("You have no single-player world yet: play one first, or choose New world.")
+                .child(tr(
+                    "You have no single-player world yet: play one first, or choose New world.",
+                ))
                 .into_any_element()
         } else {
             let mut list = div().flex().flex_col().gap(px(2.));
@@ -3085,11 +3129,9 @@ impl Launcher {
                 .flex_col()
                 .gap(px(6.))
                 .child(list)
-                .child(
-                    text(theme::CAPTION)
-                        .text_color(t.muted)
-                        .child("The server gets a copy: your single-player world stays as it is."),
-                )
+                .child(text(theme::CAPTION).text_color(t.muted).child(tr(
+                    "The server gets a copy: your single-player world stays as it is.",
+                )))
                 .into_any_element()
         };
         let modes = segments("create-mode", &MODES, mode, &t, pick(|c, v| c.mode = v));
@@ -3176,7 +3218,7 @@ impl Launcher {
                     .text_color(t.accent)
                     .cursor_pointer()
                     .hover(|s| s.opacity(0.8))
-                    .child("Read it")
+                    .child(tr("Read it"))
                     .on_click(|_, _, cx| cx.open_url(servers::EULA_URL)),
             );
         let body = div()
@@ -3193,12 +3235,12 @@ impl Launcher {
             .child(
                 text(theme::HEADING)
                     .text_color(t.ink)
-                    .child("Create a server"),
+                    .child(tr("Create a server")),
             )
-            .child(text(theme::CAPTION).text_color(t.muted).child(
-                "Everything has a default: tick the EULA and Create makes a friends-only survival \
-                 world. You can change all of it later.",
-            ))
+            .child(text(theme::CAPTION).text_color(t.muted).child(tr(
+                "Everything has a default: accept Minecraft's terms and Create makes a friends-only survival \
+                world. You can change all of it later, from the server's Settings tab.",
+            )))
             .child(row(
                 "Name",
                 self.field(Field::Name, "My server", 400., cx)
@@ -3286,11 +3328,11 @@ impl Launcher {
                 text(theme::CAPTION)
                     .flex_1()
                     .text_color(t.danger)
-                    .child("Tick the EULA box to create the server."),
+                    .child(tr("Tick the EULA box to create the server.")),
             );
         }
-        let cancel = button("create-cancel", "Cancel", Kind::Secondary, &t);
-        let create = button("create-go", "Create", Kind::Primary, &t);
+        let cancel = button("create-cancel", tr("Cancel"), Kind::Secondary, &t);
+        let create = button("create-go", tr("Create"), Kind::Primary, &t);
         foot = if creating {
             foot.child(disabled(cancel)).child(disabled(create))
         } else {
@@ -3367,6 +3409,65 @@ fn setting_name(key: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn managed_start_and_restart_require_consent_before_running_the_supervisor() {
+        const CHILD: &str = "HORIZON_MANAGED_CONSENT_TEST";
+        if std::env::var_os(CHILD).is_none() {
+            let root = tempfile::tempdir().unwrap();
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "servers_page::tests::managed_start_and_restart_require_consent_before_running_the_supervisor", "--nocapture"])
+                .env(CHILD, "1")
+                .env("HORIZON_LAUNCHER_HOME", root.path().join("launcher"))
+                .env("HORIZON_HOME", root.path().join("cache"))
+                .status().unwrap();
+            assert!(status.success());
+            return;
+        }
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let bin = servers::runtime_root().join("current");
+        std::fs::create_dir_all(&bin).unwrap();
+        let supervisor = bin.join("horizon-server");
+        std::fs::write(&supervisor, "#!/bin/sh\nprintf ran > \"$2/ran\"\n").unwrap();
+        std::fs::set_permissions(&supervisor, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::write(bin.join("horizon-engine"), "never executed").unwrap();
+        std::fs::write(root.path().join("horizon-resources.json"), "{}").unwrap();
+        let config = format!(
+            "[engine]\nresources = {:?}\n",
+            root.path().to_str().unwrap()
+        );
+        std::fs::write(root.path().join("server.toml"), config).unwrap();
+        let package = root
+            .path()
+            .join(horizon_platform::mod_package::mod_list::DIR)
+            .join("needs_jar");
+        std::fs::create_dir_all(&package).unwrap();
+        std::fs::write(package.join("horizon-mod.toml"), format!(
+            "id='needs_jar'\nname='Needs jar'\nversion='1'\napi='0.2'\ncapabilities=['registries']\n[[jar]]\nid='fixture'\nversion='1'\nsha512='{}'\n", "a".repeat(128)
+        )).unwrap();
+        std::fs::write(
+            root.path()
+                .join(horizon_platform::mod_package::mod_list::FILE),
+            "mod.needs_jar:true\n",
+        )
+        .unwrap();
+        for action in ["start", "restart"] {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let dir = root.path().to_path_buf();
+            let job = std::thread::spawn(move || run_managed_server(&tx, &dir, &[action], &|_| {}));
+            let message = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+            let backend::Msg::JarConsent { jars, reply } = message else {
+                panic!("expected jar consent")
+            };
+            assert_eq!(jars.len(), 1);
+            assert_eq!(jars[0].id(), "fixture");
+            reply.send(false).unwrap();
+            assert!(job.join().unwrap().is_err());
+            assert!(!root.path().join("ran").exists());
+        }
+    }
 
     #[test]
     fn backups_read_for_people() {
