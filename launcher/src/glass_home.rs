@@ -1,6 +1,6 @@
 //! Home's head in the glass look (the mockup's `HomeView`, `launcher-views.tsx`): the instance's
-//! edition, its icon and name, how long it was played, then Play with its menu, the version, the
-//! instance's mods and its folders, and joining a friend on the right. Dark appearance only.
+//! edition, its icon and name, how long it was played, then Play with its menu, the version, and
+//! the instance's mods and its folders. Dark appearance only.
 use super::*;
 use crate::glass_ui::{self as ui, white};
 use gpui::deferred;
@@ -10,8 +10,8 @@ use std::time::Instant;
 /// Play, the version and the big icons are this tall (`h-14`).
 const TALL: f32 = 56.;
 /// The window width from which Home's head is laid out as the mockup's `xl` (1280 px); under it
-/// Play and the version are narrower and the invite code takes what is left of their row. The
-/// account page and the theme editor also put their two columns side by side from it.
+/// Play and the version are narrower. The theme editor also puts its two columns side by side
+/// from it.
 pub(super) const WIDE: f32 = 1280.;
 /// The window width from which the top bar's pages show at full size.
 pub(super) const TOP_BAR_WIDE: f32 = 1380.;
@@ -79,10 +79,7 @@ impl Launcher {
             (None, Some(_)) => self.client_since = None,
             _ => {}
         }
-        // The invite code stays on the actions' row at every width (unlike the mockup's
-        // `xl:flex-row`, which moves it under them): on the right, 340 wide from 1280 px; under
-        // that it takes what is left, and the puzzle (the Mods tab below does the same) gives
-        // way to it.
+        // The Play group, the version picker and the folder: one line from 1280 px.
         let wide = self.window_width >= WIDE;
         let mods = ui::big_icon("home-mods", "puzzle", &self.theme).on_click(cx.listener(
             |this, _: &ClickEvent, _, cx| {
@@ -103,23 +100,16 @@ impl Launcher {
                 .children(Some(mods))
                 .children(self.folder_group(java.is_none(), cx))
                 .child(div().flex_1().min_w(px(22.)))
-                .child(self.glass_join_friend(tag, true, cx))
         } else {
-            div()
-                .mt(px(32.))
-                .flex()
-                .flex_col()
-                .gap(px(12.))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(10.))
-                        .child(self.play_group(tag, prepared || java.is_some(), cx))
-                        .children(java.is_none().then(|| self.glass_picker(cx)))
-                        .children(self.folder_group(java.is_none(), cx)),
-                )
-                .child(self.glass_join_friend(tag, false, cx))
+            div().mt(px(32.)).flex().flex_col().gap(px(12.)).child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(self.play_group(tag, prepared || java.is_some(), cx))
+                    .children(java.is_none().then(|| self.glass_picker(cx)))
+                    .children(self.folder_group(java.is_none(), cx)),
+            )
         };
         div()
             .flex()
@@ -128,7 +118,7 @@ impl Launcher {
             .pt(px(64. - crate::glass::CONTENT_INSET))
             .child(self.edition_tabs(java.is_some(), cx))
             .child(self.home_title(cx))
-            .child(self.played_text(cx))
+            .child(self.played_text())
             .child(actions)
     }
 
@@ -240,7 +230,7 @@ impl Launcher {
 
     /// "You've played for 41 h 06 min! Last played today.", or how long it has run now; then
     /// the players counts the launcher knows (not in the mockup).
-    fn played_text(&self, cx: &mut Context<Self>) -> Div {
+    fn played_text(&self) -> Div {
         let line = match (self.client_since, self.selected_instance()) {
             (Some(since), _) => trf(
                 "Playing for {time} now. Have fun!",
@@ -258,49 +248,12 @@ impl Launcher {
             },
             (None, None) => String::new(),
         };
-        let link = |id: &'static str, label: String| {
-            div()
-                .id(id)
-                .cursor_pointer()
-                .hover(|s| s.text_color(white(ink::FULL)))
-                .child(label)
-        };
-        let playing = self.playing.map(|count| {
-            let label = format!(
-                "· {}",
-                trf("{count} playing now", &[("count", &thousands(count))])
-            );
-            let url = telemetry::stats_url(&self.links.website);
-            link("playing-now", label).on_click(move |_: &ClickEvent, _, cx| {
-                if let Some(url) = &url {
-                    cx.open_url(url);
-                }
-            })
-        });
-        let official = self.official_players.map(|count| {
-            link(
-                "official-players",
-                format!(
-                    "· {}",
-                    trf(
-                        "{count} on the official SMP",
-                        &[("count", &thousands(count))]
-                    )
-                ),
-            )
-            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.go(Page::Servers);
-                cx.notify();
-            }))
-        });
         ui::text(15., FontWeight::NORMAL, ink::STRONG)
             .mt(px(16.))
             .flex()
             .flex_wrap()
             .gap(px(4.))
             .child(line)
-            .children(playing)
-            .children(official)
     }
 
     /// Play and its ⋯ menu (`PlayGroup`): Stop while the game runs, Update when the launcher's
@@ -309,19 +262,6 @@ impl Launcher {
         let t = self.theme;
         let accent = ui::color(self.look.accent);
         let running = self.client.is_some();
-        let follows = self
-            .selected_instance()
-            .is_some_and(|i| i.version.is_none());
-        let update = self
-            .updates
-            .horizon
-            .as_ref()
-            .filter(|_| follows && !tag.is_empty())
-            .map(|r| r.tag.clone());
-        let installing = update
-            .as_ref()
-            .and_then(|u| self.installing.as_ref().filter(|(t, _)| t == u))
-            .map(|(_, p)| *p);
         // The version this instance keeps, downloading since it was made or edited to play it.
         let own = self
             .selected_instance()
@@ -331,9 +271,8 @@ impl Launcher {
                 let running = self.installing.as_ref().filter(|(t, _)| t == v);
                 running.map(|(_, p)| Some(*p)).or(queued.then_some(None))
             });
-        let busy = match (installing, self.preparing, &self.starting_client) {
-            (Some(p), _, _) => Some((tr("Updating"), Some(p))),
-            (_, _, _) if own.is_some() => Some((tr("Installing"), own.flatten())),
+        let busy = match (own, self.preparing, &self.starting_client) {
+            (Some(p), _, _) => Some((tr("Installing"), p)),
             (_, true, _) => Some((
                 tr("Preparing"),
                 horizon_launcher::mojang::progress().map(|(d, n)| d as f32 / n.max(1) as f32),
@@ -442,33 +381,24 @@ impl Launcher {
                     })),
             ),
             None => {
-                let (label, icon) = match &update {
-                    Some(_) => (tr("Update"), "download-04"),
-                    None => (tr("Play"), "play"),
-                };
-                let press = play_press(ready, self.owner, false);
-                let main = body(label.into(), icon).id("play").cursor_pointer();
-                let main = match (&update, press) {
-                    (Some(_), _) => main.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.install_update();
+                let press = play_press(ready, false);
+                let main = body(tr("Play").into(), "play").id("play").cursor_pointer();
+                let main = match press {
+                    PlayPress::Play => main.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.picker.open = false;
+                        this.play();
                         cx.notify();
                     })),
-                    (None, PlayPress::Play) => {
-                        main.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.picker.open = false;
-                            this.play();
-                            cx.notify();
-                        }))
-                    }
-                    (None, PlayPress::PrepareThenPlay) => {
+                    PlayPress::PrepareThenPlay => {
                         main.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                             this.picker.open = false;
                             this.play_when_prepared = this.selected().cloned();
-                            this.prepare(backend::MinecraftFrom::Install);
+                            this.starting_instance = this.selected_instance().map(|i| i.id.clone());
+                            this.prepare();
                             cx.notify();
                         }))
                     }
-                    (None, PlayPress::Nothing) => main.opacity(0.5).cursor_default(),
+                    PlayPress::Nothing => main.opacity(0.5).cursor_default(),
                 };
                 base.bg(accent)
                     .text_color(on_accent)
@@ -498,21 +428,6 @@ impl Launcher {
                     ),
                     locked,
                     PlayItem::Prepare,
-                ));
-            }
-            if update.is_some() {
-                items.push((
-                    "play-skip",
-                    tr("Play without updating").into(),
-                    trf(
-                        "Stay on {version}",
-                        &[(
-                            "version",
-                            &horizon_launcher::nightly::label(tag).unwrap_or(tag.to_string()),
-                        )],
-                    ),
-                    locked || !ready,
-                    PlayItem::Play,
                 ));
             }
             let id = self
@@ -557,8 +472,7 @@ impl Launcher {
                     item.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.home_menu = HomeMenu::None;
                         match what {
-                            PlayItem::Prepare => this.prepare(backend::MinecraftFrom::Install),
-                            PlayItem::Play => this.play(),
+                            PlayItem::Prepare => this.prepare(),
                             PlayItem::Shortcut => {
                                 if let Some((id, name)) = id.clone() {
                                     this.toggle_shortcut(id, name);
@@ -592,7 +506,7 @@ impl Launcher {
         let label = self.selected().map_or_else(
             || tr("No version").into(),
             |tag| {
-                horizon_launcher::nightly::label(tag)
+                horizon_launcher::backend::nightly_label(tag)
                     .or_else(|| build_import::label(tag))
                     .unwrap_or_else(|| tag.clone())
             },
@@ -654,7 +568,6 @@ impl Launcher {
         );
         let mut wrap = div().relative().child(button);
         if open {
-            let follows = self.launcher_version().cloned();
             // A solid backing under the glass, as the language menu's: the plate's backdrop
             // doesn't paint under a popover whose rows scroll, and the rows must stay legible.
             let backing = if ui::light() {
@@ -678,20 +591,18 @@ impl Launcher {
                 .flex_col()
                 .max_h(px(picker_rows_max_height(self.picker.window_height)))
                 .overflow_y_scroll();
+            // Picking a version keeps the selected instance on it; the launcher's own version
+            // is what instances without a pin play.
+            let follows = self.launcher_version().cloned();
             for tag in &self.installed {
                 let chosen = self.selected() == Some(tag);
                 let latest = follows.as_ref() == Some(tag);
-                let name = horizon_launcher::nightly::label(tag)
+                let name = horizon_launcher::backend::nightly_label(tag)
                     .or_else(|| build_import::label(tag))
                     .unwrap_or_else(|| tag.clone());
-                let note = if latest {
-                    tr("Newest · follows updates").to_string()
-                } else {
-                    tag.clone()
-                };
                 let pick = tag.clone();
                 rows = rows.child(
-                    ui::menu_item(format!("pick-{tag}"), name.into(), note, false, &t)
+                    ui::menu_item(format!("pick-{tag}"), name.into(), tag.clone(), false, &t)
                         .when(chosen, |d| {
                             d.child(ui::icon("tick-02", 17., ui::color(soft)).relative())
                         })
@@ -866,100 +777,6 @@ impl Launcher {
         }
         Some(wrap)
     }
-
-    /// The invite code field (`JoinFriend`): 340 wide (`wide`), else what its row leaves, with a
-    /// shorter placeholder; the icon inside on the left, Join inside on the right.
-    fn glass_join_friend(&self, tag: &str, wide: bool, cx: &mut Context<Self>) -> Div {
-        let t = self.theme;
-        let focused = self.friend_focused;
-        let join_label = tr("Join");
-        let pr = friend_code_padding_right(join_label);
-        let field = div()
-            .id("friend-code")
-            .track_focus(&self.friend_focus)
-            .flex()
-            .items_center()
-            .size_full()
-            .pl(px(48.))
-            .pr(px(pr))
-            .rounded(px(radius::LARGE))
-            .bg(white(if focused { 0.09 } else { 0.06 }))
-            .font_family(horizon_theme::glass::FONT)
-            .text_size(px(14.))
-            .text_color(white(ink::FULL))
-            .cursor_text()
-            .overflow_hidden()
-            .child(
-                div()
-                    .flex_1()
-                    .h_full()
-                    .flex()
-                    .items_center()
-                    .overflow_hidden()
-                    .child(line_edit::content(
-                        &self.friend_code,
-                        &t,
-                        focused,
-                        false,
-                        false,
-                        if wide {
-                            "Paste a friend's invite code"
-                        } else {
-                            "Paste an invite code"
-                        },
-                    )),
-            )
-            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
-                window.focus(&this.friend_focus, cx);
-                cx.notify();
-            }))
-            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| {
-                match line_edit::handle(&mut this.friend_code, ev, cx) {
-                    line_edit::Key::Pass => return,
-                    line_edit::Key::Enter => this.join_friend(),
-                    line_edit::Key::Escape => window.blur(cx),
-                    _ => {}
-                }
-                cx.stop_propagation();
-                cx.notify();
-            }));
-        let field = line_edit::mouse(field, cx, |this| &mut this.friend_code);
-        let valid = horizon_friends::invite::parse(self.friend_code.text()).is_some();
-        let can = valid && (tag.is_empty() || self.can_start(tag));
-        let join = ui::quiet("join-friend", join_label, 40., &t);
-        let join = if can {
-            join.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.join_friend();
-                cx.notify();
-            }))
-        } else {
-            join.opacity(0.4).cursor_default()
-        };
-        let wide_w = 340. + (pr - 84.);
-        div()
-            .relative()
-            .when(wide, |d| d.flex_none().w(px(wide_w)))
-            .when(!wide, |d| d.w(px(wide_w)).max_w_full())
-            .h(px(TALL))
-            .child(field)
-            .child(
-                div()
-                    .absolute()
-                    .left(px(16.))
-                    .top(px((TALL - 19.) / 2.))
-                    .child(ui::icon("user-add-01", 19., white(ink::NOTE))),
-            )
-            .child(div().absolute().right(px(8.)).top(px(8.)).child(join))
-    }
-}
-
-/// Right padding for the invite code text field. In English ("Join"), the button is ~58 px wide,
-/// so 84 px leaves a clean margin from the button placed at right: 8 px. In locales with longer
-/// labels (French "Rejoindre", German "Beitreten", Ukrainian "Приєднатися"), the button is wider;
-/// expand the field's padding so the button never overlaps the entered text or placeholder (#9507).
-fn friend_code_padding_right(join_label: &str) -> f32 {
-    let btn_width = 28. + (join_label.chars().count() as f32 * 8.5).max(30.);
-    (8. + btn_width + 12.).max(84.)
 }
 
 /// The instance of one edition (`java`) an edition tab goes to: of those the player can select,
@@ -1014,7 +831,6 @@ fn since(ago: Duration, days: i64, date: &str) -> String {
 #[derive(Clone, Copy)]
 enum PlayItem {
     Prepare,
-    Play,
     Shortcut,
     Command,
 }
@@ -1096,26 +912,5 @@ mod tests {
         assert_eq!(since(m(20 * 60), 1, "2026-11-02"), "20 hours ago");
         assert_eq!(since(m(30 * 60), 1, "2026-11-02"), "yesterday");
         assert_eq!(since(m(3 * 24 * 60), 3, "2026-10-31"), "Oct 31");
-    }
-
-    #[test]
-    fn friend_code_padding_right_clears_localized_join_button() {
-        for label in [
-            "Join",
-            "Rejoindre",
-            "Beitreten",
-            "Приєднатися",
-            "Unirse",
-            "Dołącz",
-            "Reunir-se",
-        ] {
-            let pr = friend_code_padding_right(label);
-            let btn_width = 28. + label.chars().count() as f32 * 8.5;
-            let btn_right_extent = 8. + btn_width;
-            assert!(
-                pr >= btn_right_extent + 10.,
-                "padding {pr} must clear button right extent {btn_right_extent} for label '{label}'"
-            );
-        }
     }
 }

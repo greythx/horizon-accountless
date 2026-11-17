@@ -15,7 +15,7 @@ const RELOAD: Duration = Duration::from_secs(30);
 
 pub(super) enum Event {
     State(State),
-    Token(Option<String>),
+    Token(Result<Option<String>, String>),
     Invites(Result<Vec<Invite>, String>),
     Policy(Result<(Value, Option<String>), String>),
     /// An action finished: what to tell the player, and whether to read invites and policy again.
@@ -27,7 +27,7 @@ pub(super) struct Internet {
     state: Option<State>,
     reading: bool,
     read: Option<Instant>,
-    /// The access token, once read from the keychain (None: not read yet; Some(None): none).
+    /// The access token, once read from the secrets file (None: not read yet; Some(None): none).
     token: Option<Option<String>>,
     asking_token: bool,
     invites: Option<Result<Vec<Invite>, String>>,
@@ -105,8 +105,8 @@ impl Launcher {
         std::thread::spawn(move || {
             let _ = tx.send(Event::State(tailscale::status()));
             if want_token {
-                let token = account::keychain().get(tailscale::TOKEN_KEY).ok().flatten();
-                let _ = tx.send(Event::Token(token));
+                let token = Event::Token(horizon_launcher::secrets_file::get(tailscale::TOKEN_KEY));
+                let _ = tx.send(token);
             }
         });
     }
@@ -124,9 +124,15 @@ impl Launcher {
                     self.internet_load();
                 }
             }
-            Event::Token(token) => {
-                i.token = Some(token);
+            Event::Token(Ok(Some(token))) => {
+                i.token = Some(Some(token));
                 self.internet_load();
+            }
+            // Nothing saved yet; the panel offers to paste a token. A failed storage read keeps
+            // `i.token` unset (above), so the next tick tries again.
+            Event::Token(Ok(None)) => i.token = Some(None),
+            Event::Token(Err(e)) => {
+                i.message = Some(Err(format!("Could not read the saved access token: {e}")));
             }
             Event::Invites(r) => i.invites = Some(r),
             Event::Policy(r) => i.policy = Some(r),
@@ -175,19 +181,18 @@ impl Launcher {
         }
         self.servers.text(Field::Token).set(String::new());
         self.internet.asking_token = false;
-        self.internet.message = match account::keychain().set(tailscale::TOKEN_KEY, &token) {
-            Ok(()) if account::keychain().persistent() => None,
-            Ok(()) => Some(Ok(
-                "No keychain here: the token is kept until the launcher closes.".into(),
-            )),
-            Err(e) => Some(Err(e)),
-        };
+        self.internet.message = horizon_launcher::secrets_file::set(tailscale::TOKEN_KEY, &token)
+            .err()
+            .map(Err);
         self.internet.token = Some(Some(token));
         self.internet_load();
     }
 
     fn forget_token(&mut self) {
-        let _ = account::keychain().delete(tailscale::TOKEN_KEY);
+        if let Err(e) = horizon_launcher::secrets_file::delete(tailscale::TOKEN_KEY) {
+            self.internet.message = Some(Err(format!("Could not forget the access token: {e}")));
+            return;
+        }
         let i = &mut self.internet;
         i.token = Some(None);
         i.invites = None;
@@ -589,7 +594,7 @@ impl Launcher {
                             .child(link("ts-keys", "Make a token", tailscale::KEYS)),
                     )
                     .child(line(
-                        tr("Settings, Keys, Generate access token. It's kept in this computer's keychain and only sent to Tailscale.")
+                        tr("Settings, Keys, Generate access token. It's kept in the launcher's data folder, readable only by you, and only sent to Tailscale.")
                             .into(),
                     ));
             } else {

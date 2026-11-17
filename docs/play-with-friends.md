@@ -2,7 +2,7 @@
 
 A player opens their single-player world to friends with one click and gets an **invite code**.
 Friends paste the code (in game: the title screen's Friends button opens Join a Friend, and Direct
-Connection takes a full code too; or on the launcher's Play page) and join.
+Connection takes a full code too) and join.
 There is no Horizon server in the middle and no account: the code itself says where the host is and
 holds the key that encrypts the game between them.
 

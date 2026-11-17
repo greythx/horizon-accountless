@@ -136,8 +136,8 @@ Geist (400, 500, 600) and Geist Mono (400), bundled under the SIL Open Font Lice
 
 - **Launcher** (`launcher/`): moving to the Night look below, screen by screen; screens not rebuilt
   yet draw the Blocks parts in the night's colours (`Night::blocks`). A top bar (wordmark, the pages as
-  tabs, the account chip, Settings), a sidebar (the instances, the hosted servers, the launcher's
-  own version and channel at its foot), and the page over a stone texture. Home opens on a pixel
+  tabs, Settings), a sidebar (the instances, the hosted servers, the launcher's
+  own version at its foot), and the page over a stone texture. Home opens on a pixel
   landscape banner with the hero, the version picker and Play; Mods holds the mod, resource pack
   and modpack tabs; Versions and Patch notes are lists of panels; Settings is
   grouped panels of rows. Dark by default, Light or System in Settings (Appearance).
@@ -180,16 +180,6 @@ than Pixelify. Hover and focus are vanilla's white edge.
   ships no third-party pictures. Plain Minecraft shows Horizon's own grass block
   (`tools/launcher_grass_block.py`), Horizon the brand icon (`docs/media/brand/icon.svg`). Sources are named in text ("from Modrinth"): Modrinth's logo is
   all rights reserved, so it is not shown.
-- **Partner banner**: the one exception to shipping no third-party pictures. Sculk, a server host,
-  sponsors Horizon: its banner (`launcher/assets/sculk-banner.webp`, `launcher/src/partner.rs`) sits
-  under a muted mono "Partner" label at the end of the Servers page and opens Sculk's page in the
-  browser. The sidebar of the other pages shows a card made for its width instead: Sculk's characters
-  and logo cropped from the same banner, and the text drawn by the launcher in its language, so it
-  stays readable; it keeps Sculk's dark card, cyan and rounded corners in both themes, as an ad does,
-  and turns compact (characters beside the text) when the window is too short. After three minutes
-  on screen, over every start and on any page, a "Hide" appears beside the label of the card and of
-  the Servers banner alike; either one hides both for good (`Settings::partner_hidden`). The website shows the
-  banner the same way on Home and the hosting docs, as a `rel="sponsored"` link.
 - **Pixel art drawn in code.** The stone behind the pages is close shades of the page colour
   (`TILE_SHADES`), never Minecraft's stone; the landscape is a banded sky, a sun cut in slices like
   the mark, hills and square trees (a sunset in dark, a dawn in light). The launcher bakes them in
@@ -280,8 +270,8 @@ Light); `tokens.css` carries them as `--night-*`. The game's menus don't use it.
   cards show the same logos. Pixel-art logos are scaled by whole
   pixels; each is decoded once per size.
 - **The instance's tabs** (`launcher/src/home_tabs.rs`): under Home's hero, one tab at a time
-  instead of one long page: Overview (what Play needs: the instance, the game or its resources,
-  the account), Worlds, Multiplayer, Packs, then Screenshots and Console once they have something.
+  instead of one long page: Overview (what Play needs: the instance and the game or its resources),
+  Worlds, Multiplayer, Packs, then Screenshots and Console once they have something.
   A tab names how many it holds ("Worlds 3"); its own buttons (Add server, Open folder) sit at the
   strip's end, where a list's header would put them (`HORIZON_LAUNCHER_PAGE=worlds`, `packs`...
   opens one for screenshots).
@@ -291,16 +281,9 @@ Light); `tokens.css` carries them as `--night-*`. The game's menus don't use it.
   "needed by another mod", or a local file by name), an update as an amber pill when the browser
   found one, and a switch (a Java jar turned off is renamed `.disabled`). Update all and Add mods
   sit at the strip's end (`HORIZON_LAUNCHER_PAGE=instance-mods`).
-- **Sign in with Microsoft** (`launcher/src/microsoft.rs`): every button that signs in is
-  Microsoft's own, drawn as Microsoft publishes it: 41 pixels tall, its four-square symbol, the text
-  semibold at 15 pixels, `#2F2F2F` with white text at night, white with `#5E5E5E` text and a
-  `#8C8C8C` border at dawn, square corners. Not one of the launcher's cut plates: Microsoft's
-  guidelines ask for the button as it is.
-- **The sign-in sheet** (`launcher/src/owner_page.rs`, the owner gate): an opaque plate over the
-  dimmed launcher, never instead of it. It says why (the account that owns Java Edition, no install
-  needed), the code in mono on a raised box with Copy, and Open link as the main action; the window
-  goes on by itself once Microsoft answers (`HORIZON_LAUNCHER_PAGE=sign-in` shows it with a made-up
-  code for screenshots).
+- Sign-in surfaces (Microsoft's button and the sign-in sheet) are upstream design history: this fork
+  removed them with the account system ([FORK.md](../FORK.md)); nothing here draws or documents
+  them now.
 - **New instance** (`launcher/src/new_instance.rs`): an opaque plate over the dimmed launcher,
   tabs for the kind (Horizon, Vanilla, Modded). A Java kind lists Mojang's versions (search,
   Snapshots, Old; the newest release chosen), Modded adds the loader (Fabric, Quilt, Forge or NeoForge, with its logo, at its newest

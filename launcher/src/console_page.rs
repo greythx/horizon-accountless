@@ -214,7 +214,7 @@ impl Launcher {
                         text(theme::CAPTION).text_color(t.ink_soft).child(tr(
                             "Upload this log to mclo.gs, a paste service for Minecraft logs? \
                              Anyone with the link can read it, until it is deleted or unread \
-                             for 90 days. Your home folder, user name and account names are \
+                             for 90 days. Your home folder, user name and player name are \
                              taken out first.",
                         )),
                     ))
@@ -432,7 +432,7 @@ impl Launcher {
                         ui::text(13., FontWeight::NORMAL, ink::SOFT).child(tr(
                             "Upload this log to mclo.gs, a paste service for Minecraft logs? \
                              Anyone with the link can read it, until it is deleted or unread \
-                             for 90 days. Your home folder, user name and account names are \
+                             for 90 days. Your home folder, user name and player name are \
                              taken out first.",
                         )),
                     ))

@@ -570,7 +570,9 @@ pub enum World {
     Copy(PathBuf),
 }
 
-/// What the Create dialog asks; [`NewServer::default`] alone makes a working server.
+/// What the Create dialog asks; [`NewServer::default`] alone makes a working server. This fork
+/// always runs its servers offline (`--offline`): no client anywhere here has a Minecraft sign-in,
+/// so there is no account check to switch on.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NewServer {
     pub name: String,
@@ -580,10 +582,6 @@ pub struct NewServer {
     pub max_players: u32,
     /// Only listed players (and operators) may join.
     pub friends_only: bool,
-    /// Check players' Minecraft accounts: they must sign in with Microsoft. On by default; an offline
-    /// server is a security risk, so it is turned off only per server (`--offline`, or the server's
-    /// settings page).
-    pub check_accounts: bool,
     /// Who may join first (whitelisted), and the first of them becomes an operator.
     pub players: Vec<String>,
     pub eula: bool,
@@ -600,7 +598,6 @@ impl Default for NewServer {
             difficulty: "normal".into(),
             max_players: 10,
             friends_only: true,
-            check_accounts: true,
             players: Vec::new(),
             eula: false,
         }
@@ -677,9 +674,8 @@ pub fn init_args(spec: &NewServer, world: &str, port: u16) -> Vec<String> {
     } else {
         "--no-whitelist".into()
     });
-    if !spec.check_accounts {
-        args.push("--offline".into());
-    }
+    // This fork always runs servers offline: no client anywhere here has a Minecraft sign-in.
+    args.push("--offline".into());
     for p in &spec.players {
         args.extend(["--player".into(), p.clone()]);
     }

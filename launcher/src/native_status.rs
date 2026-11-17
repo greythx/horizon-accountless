@@ -102,7 +102,7 @@ impl Build {
 
     /// The same, short enough for the instance list: `Nightly 10-28`.
     pub fn horizon_short(&self) -> String {
-        match crate::nightly::date_of(&self.base) {
+        match crate::backend::nightly_date_of(&self.base) {
             Some(date) => format!("Nightly {}", &date[5..]),
             None => self.base.clone(),
         }
@@ -112,7 +112,7 @@ impl Build {
 /// A release or Nightly as a player reads it beside "Horizon": `v0.2.93` as it is,
 /// `nightly-2026-10-29-4baa571` as `Nightly 2026-10-29`.
 pub fn horizon_label(version: &str) -> String {
-    match crate::nightly::date_of(version) {
+    match crate::backend::nightly_date_of(version) {
         Some(date) => format!("Nightly {date}"),
         None => version.to_owned(),
     }

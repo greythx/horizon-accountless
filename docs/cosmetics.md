@@ -1,5 +1,9 @@
 # Cosmetics
 
+> **In this fork:** the launcher's cosmetics UI (the Wardrobe, the Shop, the cosmetics settings, the
+> "cosmetics service" calls the launcher made) is removed — see [FORK.md](../FORK.md). This page
+> documents Horizon's cosmetics system; the game-side parts documented here remain.
+
 Small items Horizon players wear: a hat, something on the back, a shirt, a pet on the shoulder, a
 style for their name tag. They are drawn by Horizon clients only and change nothing in the game.
 **On by default** (Ludovic, 2026-11-04: on when the shop opens), your own shown. Other players'

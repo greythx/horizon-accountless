@@ -399,7 +399,7 @@ impl Launcher {
             NewKind::Horizon => {
                 tr("Its own worlds and packs. Your options and player name come along.")
             }
-            _ => tr("Play downloads the game from Mojang the first time, with the Java it needs."),
+            _ => tr("Play starts the game from your own install the first time, with the Java it needs."),
         };
         // One made in the launcher can switch what it plays; the game's home and modpacks
         // play what they were made with.
@@ -567,7 +567,7 @@ pub(super) fn horizon_choices(releases: &[Release], installed: &[String]) -> Vec
 
 /// "Nightly · c9d474d", "Imported · 2026-10-30", or the tag.
 fn version_label(tag: &str) -> String {
-    horizon_launcher::nightly::label(tag)
+    horizon_launcher::backend::nightly_label(tag)
         .or_else(|| build_import::label(tag))
         .unwrap_or_else(|| tag.to_string())
 }
@@ -817,7 +817,7 @@ impl Launcher {
                 let latest = follows.as_ref() == Some(&tag);
                 let newest = i == 0;
                 let on = chosen.as_ref() == Some(&tag);
-                let date = horizon_launcher::nightly::date_of(&tag)
+                let date = horizon_launcher::backend::nightly_date_of(&tag)
                     .map(|d| glass_versions::published(d, ""));
                 let pick = tag.clone();
                 list_choice(format!("horizon-version-{tag}"), on, &t)

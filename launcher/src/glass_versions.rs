@@ -59,7 +59,7 @@ fn nightly_card_text(release: &Release) -> Option<(String, String)> {
     release.nightly.as_ref()?;
     let date = published(&release.date, "");
     let title = format!("{} · {date}", tr("Nightly"));
-    let commit = horizon_launcher::nightly::label(&release.tag)
+    let commit = horizon_launcher::backend::nightly_label(&release.tag)
         .and_then(|label| {
             label
                 .split_once(" · ")
@@ -78,16 +78,6 @@ impl Launcher {
         cx: &mut Context<Self>,
     ) -> Div {
         let t = self.theme;
-        let auto = switch("versions-auto-install", self.settings.auto_install(), &t).on_click(
-            cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.settings.install_new_versions = Some(!this.settings.auto_install());
-                this.save_settings();
-                if this.settings.auto_install() {
-                    this.install_update();
-                }
-                cx.notify();
-            }),
-        );
         let wide = self.window_width >= crate::glass_home::SIDE_BY_SIDE;
         let page_title = ui::page_head(
             tr("Versions"),
@@ -97,16 +87,6 @@ impl Launcher {
             ),
         )
         .mb_0();
-        let auto_switch = div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap(px(12.))
-            .child(
-                ui::text(14., FontWeight::NORMAL, 0.85)
-                    .child(tr("Install new versions automatically")),
-            )
-            .child(auto);
         let head = if wide {
             div()
                 .flex()
@@ -115,7 +95,6 @@ impl Launcher {
                 .justify_between()
                 .gap(px(20.))
                 .child(page_title)
-                .child(auto_switch)
                 .mb(px(28.))
         } else {
             div()
@@ -124,7 +103,6 @@ impl Launcher {
                 .items_start()
                 .gap(px(16.))
                 .child(page_title.w_full())
-                .child(auto_switch)
                 .mb(px(28.))
         };
         // The space they take and Import a game build (not in the mockup): a quiet line above
@@ -143,34 +121,7 @@ impl Launcher {
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.import_build(cx)))
                 .into_any_element()
         };
-        let sponsor = (!self.links.sponsor.is_empty()).then(|| {
-            let url = self.links.sponsor.clone();
-            crate::glass::plate(radius::PANEL)
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap(px(16.))
-                .p(px(24.))
-                .mb(px(24.))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.))
-                        .child(
-                            ui::text(16., FontWeight::SEMIBOLD, ink::FULL)
-                                .child(tr("Support the work below")),
-                        )
-                        .child(ui::text(14., FontWeight::NORMAL, ink::BODY).child(tr(
-                            "Horizon is built in the open. Sponsors fund the next release.",
-                        ))),
-                )
-                .child(
-                    ui::quiet_icon("sponsor", Some("github"), tr("Sponsor on GitHub"), 36., &t)
-                        .on_click(move |_: &ClickEvent, _, cx| cx.open_url(&url)),
-                )
-        });
-        let mut page = div().flex().flex_col().child(head).children(sponsor).child(
+        let mut page = div().flex().flex_col().child(head).child(
             div()
                 .flex()
                 .items_center()
@@ -537,7 +488,8 @@ impl Launcher {
                     line.push(trf("Built on {base}", &[("base", &about.base)]));
                 }
                 if let Some(about) = build_import::about(&tag) {
-                    let base = horizon_launcher::nightly::label(&about.base).unwrap_or(about.base);
+                    let base =
+                        horizon_launcher::backend::nightly_label(&about.base).unwrap_or(about.base);
                     line.push(trf("Game files from {base}", &[("base", &base)]));
                     line.push(about.file);
                 }
@@ -548,7 +500,7 @@ impl Launcher {
                 } else {
                     self.glass_version_actions(&tag, cx).into_any_element()
                 };
-                let title = horizon_launcher::nightly::label(&tag)
+                let title = horizon_launcher::backend::nightly_label(&tag)
                     .or_else(|| build_import::label(&tag))
                     .unwrap_or_else(|| tag.trim_start_matches('v').to_string());
                 d = d.child(self.glass_version_card(&tag, title, &mut line, false, on_disk, right));

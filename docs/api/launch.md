@@ -17,10 +17,10 @@ reference implementation. Proposed in horizon-rust/horizon#3545.
 
 The whole way, from picking a build to playing: [launch-guide.md](launch-guide.md). In short:
 
-1. Start Horizon only for a player signed in with a Microsoft account that owns Minecraft: Java Edition, and
-   hand over that account's session (`--session-stdin`, or `--session-file`), never on the command line. This
-   is the same owner gate `horizon-launcher` applies before every start. Horizon never downloads Mojang's
-   files; a launcher that does downloads them only for that owner.
+1. Start Horizon, signed in or not: without an account the game starts offline (its online-mode
+   servers will refuse the player, but the game runs). With an account that owns Minecraft: Java Edition,
+   hand over that account's session (`--session-stdin`, or `--session-file`), never on the command line.
+   Horizon never downloads Mojang's files; a launcher that does downloads them only for an owner.
 2. Ask the build what it takes: `horizon-client --launch-api` prints JSON with `launch_api` (the version),
    `options` and `content` (which mods, shader packs and packs it loads). Pass only options it lists: any other is
    refused with exit code 2.
@@ -40,7 +40,7 @@ option, the `--launch-api` reply and the exit codes.
 
 ### The session JSON
 
-The account the game joins online-mode servers with ([microsoft-account.md](../microsoft-account.md)):
+The account the game joins online-mode servers with ([microsoft-account.md](../microsoft-account.md)), when it signs in:
 
 ```json
 {"name": "Alex", "uuid": "069a79f444e94726a5befca90e38aaf5", "access_token": "…", "user_type": "msa", "xuid": "…"}
@@ -86,8 +86,8 @@ horizon-prepare --check --output PREPARED
   would give. Every file is still checked against the pins. When an earlier import beside the preparer is still
   verified, it is reused and these files aren't read.
 - `--server-jar PATH`: the first `--prepare` needs the server jar, which no launcher keeps. Horizon never
-  downloads it; a launcher downloads it (the version JSON's `downloads.server`) only for a signed-in account
-  that owns Java Edition, as `horizon-launcher` does.
+  downloads it; a launcher downloads it (the version JSON's `downloads.server`) for a preparation,
+  unconditionally in this fork (for a signed-in account in upstream).
 - `--java-home PATH`: a Java of the pinned version that the launcher manages, tried after `JAVA_HOME` and the
   `PATH`, before the official launcher's runtimes.
 - Exit codes: 0 done, 1 failed or gaps found, 2 a refused command line.

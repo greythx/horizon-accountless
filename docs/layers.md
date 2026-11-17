@@ -242,9 +242,9 @@ it. Mods loaded as WebAssembly run as separate modules, not linked into the exec
 | The launcher's release builds, every platform and format: Linux `.tar.gz` and AppImage, macOS `.zip` and signed `.dmg`, Windows `.zip` and `horizon-launcher-setup*.exe` | `.github/workflows/launcher.yml` |
 | GitHub releases (`launcher@X.Y.Z`) | `launcher.yml`'s release job, `tools/release_train.py` |
 | playhorizon.dev's download page | horizon-rust/horizon-site, reading `launcher/links.json` and the releases |
-| The launcher's self-update | `launcher/src/backend.rs` (`stage_update`), `launcher/src/update_handoff.rs`, `launcher/src/nightly.rs` |
+| The launcher's self-update | removed in this fork ([FORK.md](../FORK.md)); upstream: `launcher/src/backend.rs` (`stage_update`), `launcher/src/update_handoff.rs`, `launcher/src/nightly.rs` |
 | The game builds the launcher installs, so the in-game part reaches every player | `.github/workflows/nightly-build.yml`, `release.yml`, `game-build.yml` |
-| The links the launcher and the site read (Discord, sponsors, website, official server) | `launcher/links.json` |
+| The links the launcher and the site read (Discord, sponsors, website, official server) | removed in this fork ([FORK.md](../FORK.md)); upstream: `launcher/links.json` |
 
 These stay without it: builds of this repository from source, horizon-plain, and `packaging/server/install.sh`
 and `install.ps1` (the dedicated server). The server's anticheat and chat filter are platform features.
@@ -614,7 +614,7 @@ Horizon's own and third-party addresses (Horizon layer):
 
 | Address | For | Where today |
 |---|---|---|
-| `play.playhorizon.dev` (status `:24454`), previously `horizon.bunchy7s.dev` | the official server in the list, its status | `horizon-addresses` (#12993), `launcher/links.json` |
+| `play.playhorizon.dev` (status `:24454`), previously `horizon.bunchy7s.dev` | the official server in the list, its status | `horizon-addresses` (#12993); the launcher's seeding of it is removed in this fork ([FORK.md](../FORK.md)) |
 | `cosmetics.playhorizon.dev` | cosmetics, emotes, presence | `horizon-addresses` (#12993) |
 | `playhorizon.dev/perf`, `playhorizon.dev/api/perf/captures` | the performance viewer Open shows a saved capture in, and the upload behind Share (`HORIZON_PERF_VIEWER`, `HORIZON_PERF_CAPTURES` override them) | `horizon-addresses`, used by `horizon-perf-share` |
 | `telemetry.playhorizon.dev` | opt-in telemetry, the "I'm playing" ping, benchmark uploads | `horizon-addresses` (#12993) |
@@ -626,7 +626,7 @@ Horizon's own and third-party addresses (Horizon layer):
 | `playhorizon.dev` | the download link shown with no resources | `no_resources.rs` |
 | `api.github.com`, `discord.com` | hosting: updates, Discord webhooks | `horizon-server` |
 | `api.github.com`, `uploads.github.com`, `playhorizon.dev` | the registry's submission service | `horizon-mod-registry` |
-| Modrinth, CurseForge, Fabric, Quilt, Forge, NeoForge, GitHub, Microsoft and Xbox sign-in, Tailscale, `discord.gg`, `mclo.gs`, Sculk Hosting, `static.rust-lang.org`, GitHub Sponsors | the launcher's browsers, loaders, sign-in, logs, hosting, partner and sponsor pages | `launcher/src/`, `launcher/links.json` |
+| Modrinth, CurseForge, Fabric, Quilt, Forge, NeoForge, GitHub, Microsoft and Xbox sign-in, Tailscale, `discord.gg`, `mclo.gs`, Sculk Hosting, `static.rust-lang.org`, GitHub Sponsors | the launcher's browsers, loaders, sign-in, logs, hosting, partner and sponsor pages (the sign-in, partner and sponsor pages are removed in this fork: [FORK.md](../FORK.md)) | `launcher/src/`; upstream `launcher/links.json` (removed here) |
 
 These are not addresses:
 

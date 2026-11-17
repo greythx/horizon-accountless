@@ -1,22 +1,14 @@
 //! Home in the night look (docs/design-system.md, "Night"): the selected instance's name over the
-//! sky with what it plays and whether it is ready, Play and the actions beside it, and a card with
-//! what's new and joining a friend.
+//! sky with what it plays and whether it is ready, and Play and the actions beside it.
 use super::*;
 use crate::plate::alpha;
 use crate::shell::{action, c, label, Action};
 use theme::night;
 
 impl Launcher {
-    /// The focal point: what will start and its state, the instance's name, when it was played,
-    /// and an update when one waits. No `tag`: a Java instance's Minecraft (`game` then names its
-    /// loader too).
-    pub(super) fn hero(
-        &mut self,
-        tag: &str,
-        game: &str,
-        prepared: bool,
-        cx: &mut Context<Self>,
-    ) -> Div {
+    /// The focal point: what will start and its state, the instance's name, when it was played.
+    /// No `tag`: a Java instance's Minecraft (`game` then names its loader too).
+    pub(super) fn hero(&mut self, tag: &str, game: &str, prepared: bool) -> Div {
         let t = self.theme;
         let n = t.night;
         let icon = self
@@ -36,49 +28,12 @@ impl Launcher {
         if !tag.is_empty() {
             what.push(format!(
                 "Horizon {}",
-                horizon_launcher::nightly::label(tag)
+                horizon_launcher::backend::nightly_label(tag)
                     .or_else(|| horizon_launcher::build_import::label(tag))
                     .unwrap_or_else(|| tag.trim_start_matches('v').to_string())
             ));
         }
         what.push(tr(if prepared { "Ready" } else { "Needs preparing" }).to_string());
-        // The exact count, a link to the page with its history and peaks.
-        let ink = c(n.ink);
-        let playing = self.playing.map(|count| {
-            let label = format!(
-                "· {}",
-                trf("{count} playing now", &[("count", &thousands(count))])
-            );
-            match telemetry::stats_url(&self.links.website) {
-                Some(url) => div()
-                    .id("playing-now")
-                    .cursor_pointer()
-                    .hover(move |s| s.text_color(ink))
-                    .child(label)
-                    .on_click(move |_: &ClickEvent, _, cx| cx.open_url(&url))
-                    .into_any_element(),
-                None => div().child(label).into_any_element(),
-            }
-        });
-        // The official server's own count, from its status ping: opens the Servers page, where
-        // it is listed.
-        let official = self.official_players.map(|count| {
-            div()
-                .id("official-players")
-                .cursor_pointer()
-                .hover(move |s| s.text_color(ink))
-                .child(format!(
-                    "· {}",
-                    trf(
-                        "{count} on the official SMP",
-                        &[("count", &thousands(count))]
-                    )
-                ))
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.go(Page::Servers);
-                    cx.notify();
-                }))
-        });
         let state = div()
             .flex()
             .items_center()
@@ -94,12 +49,10 @@ impl Launcher {
                     .font_weight(FontWeight::MEDIUM)
                     .flex()
                     .gap(px(4.))
-                    .child(what.join(" · "))
-                    .children(playing)
-                    .children(official),
+                    .child(what.join(" · ")),
             );
-        // Never squeezed by the rows below: the ping notice can make it tall.
-        let mut hero = div()
+        // Never squeezed by the rows below.
+        div()
             .flex()
             .flex_none()
             .flex_col()
@@ -120,82 +73,7 @@ impl Launcher {
             )
             .children(instance.map(|i| {
                 shell::text(night::UI, c(n.ink_soft)).child(instances_page::played_line(i))
-            }));
-        // A Java instance (no Horizon tag) isn't offered Horizon's updates.
-        if let Some(release) = self.updates.horizon.as_ref().filter(|_| !tag.is_empty()) {
-            let installing = self.installing.as_ref().filter(|(t, _)| *t == release.tag);
-            let line = shell::text(night::CAPTION, c(n.muted))
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .child(div().size(px(6.)).bg(c(n.accent_hi)))
-                .child(trf(
-                    "{version} available",
-                    &[("version", update_name(release))],
-                ));
-            hero = hero.child(match installing {
-                Some((_, p)) => line
-                    .child(
-                        div()
-                            .w(px(120.))
-                            .flex()
-                            .child(progress_bar(Some(self.bar), &t)),
-                    )
-                    .child(format!("{:.0}%", p * 100.)),
-                None => line.child(
-                    div()
-                        .id("install-update")
-                        .text_color(c(n.accent_hi))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .cursor_pointer()
-                        .hover(|s| s.opacity(0.8))
-                        .child(tr("Install"))
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.install_update();
-                            cx.notify();
-                        })),
-                ),
-            });
-        }
-        // Players who answered the first-run question before the ping existed read about it
-        // once here.
-        if !self.settings.ping_notice_seen && !self.collection.consent.needs_asking() {
-            hero = hero.child(
-                crate::plate::plate(&n)
-                    .flex()
-                    .flex_none()
-                    .flex_col()
-                    .gap(px(6.))
-                    .p(px(16.))
-                    .w_full()
-                    .max_w(px(560.))
-                    .child(
-                        shell::text(night::UI, c(n.ink))
-                            .relative()
-                            .child(tr(telemetry::PING_NAME)),
-                    )
-                    .child(
-                        shell::text(night::CAPTION, c(n.muted))
-                            .relative()
-                            .child(tr(telemetry::PING)),
-                    )
-                    .child(
-                        shell::text(night::UI, c(n.accent_hi))
-                            .relative()
-                            .id("ping-notice-ok")
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .cursor_pointer()
-                            .hover(|s| s.opacity(0.8))
-                            .child(tr("Got it"))
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.settings.ping_notice_seen = true;
-                                this.save_settings();
-                                cx.notify();
-                            })),
-                    ),
-            );
-        }
-        hero
+            }))
     }
 
     /// Play, then what else the instance offers: its version (Horizon), its mods, its folder.
@@ -243,7 +121,7 @@ impl Launcher {
             .child(label(
                 tr(if running { "Running" } else { "Play" }).to_string(),
             ));
-        match play_press(ready, self.owner, self.preparing || running) {
+        match play_press(ready, self.preparing || running) {
             PlayPress::Nothing => play = disabled(play),
             PlayPress::Play => {
                 play = play.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
@@ -256,7 +134,8 @@ impl Launcher {
                 play = play.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                     this.picker.open = false;
                     this.play_when_prepared = this.selected().cloned();
-                    this.prepare(backend::MinecraftFrom::Install);
+                    this.starting_instance = this.selected_instance().map(|i| i.id.clone());
+                    this.prepare();
                     cx.notify();
                 }))
             }
@@ -287,133 +166,6 @@ impl Launcher {
                     })
             }))
     }
-
-    /// The card beside the hero, for a Horizon version: a line from a release's notes, and
-    /// joining a friend with their invite code.
-    pub(super) fn home_card(&self, tag: &str, cx: &mut Context<Self>) -> Div {
-        let t = self.theme;
-        let n = t.night;
-        let summary = match &self.releases {
-            Load::Ready(list) => list
-                .iter()
-                .find(|r| r.tag == tag)
-                // A Nightly's notes name its build, nothing a player reads for.
-                .filter(|r| r.nightly.is_none())
-                .and_then(|r| backend::notes_summary(&r.body)),
-            _ => None,
-        };
-        let heading = |s: &str| {
-            shell::text(night::CAPTION, c(n.muted))
-                .relative()
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(tr(s).to_string())
-        };
-        let mut card = crate::plate::plate(&n)
-            .flex()
-            .flex_none()
-            .flex_col()
-            .gap(px(8.))
-            .w(px(360.))
-            .p(px(20.));
-        if let Some(line) = summary {
-            card = card
-                .child(heading("What's new"))
-                .child(
-                    shell::text(night::UI, c(n.ink))
-                        .relative()
-                        .font_weight(FontWeight::BOLD)
-                        .child(
-                            horizon_launcher::nightly::label(tag)
-                                .or_else(|| horizon_launcher::build_import::label(tag))
-                                .unwrap_or_else(|| tag.trim_start_matches('v').to_string()),
-                        ),
-                )
-                .child(
-                    shell::text(night::CAPTION, c(n.ink_soft))
-                        .relative()
-                        .line_clamp(3)
-                        .child(line),
-                )
-                .child(
-                    div()
-                        .relative()
-                        .my(px(8.))
-                        .h(px(1.))
-                        .bg(alpha(n.stroke, n.rule_alpha)),
-                );
-        }
-        card.child(heading("Join a friend"))
-            .child(self.friend_box(self.can_start(tag), cx))
-    }
-
-    /// The invite code field and Join.
-    fn friend_box(&self, can_play: bool, cx: &mut Context<Self>) -> Div {
-        let t = self.theme;
-        let n = t.night;
-        let focused = self.friend_focused;
-        let field = div()
-            .id("friend-code")
-            .track_focus(&self.friend_focus)
-            .flex()
-            .flex_1()
-            .min_w_0()
-            .items_center()
-            .h(px(theme::CONTROL))
-            .px(px(12.))
-            .overflow_hidden()
-            .rounded(px(night::RADIUS_CONTROL))
-            .border_1()
-            .border_color(if focused {
-                c(n.accent_hi)
-            } else {
-                alpha(n.stroke, 2. * n.stroke_alpha).into()
-            })
-            .bg(alpha(n.page, 0.6))
-            .font_family(theme::MONO)
-            .text_size(px(12.))
-            .cursor_text()
-            .child(line_edit::content(
-                &self.friend_code,
-                &t,
-                focused,
-                false,
-                false,
-                tr("Paste an invite code"),
-            ))
-            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
-                window.focus(&this.friend_focus, cx);
-                cx.notify();
-            }))
-            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| {
-                match line_edit::handle(&mut this.friend_code, ev, cx) {
-                    line_edit::Key::Pass => return,
-                    line_edit::Key::Enter => this.join_friend(),
-                    line_edit::Key::Escape => window.blur(cx),
-                    _ => {}
-                }
-                cx.stop_propagation();
-                cx.notify();
-            }));
-        let field = line_edit::mouse(field, cx, |this| &mut this.friend_code);
-        let valid = horizon_friends::invite::parse(self.friend_code.text()).is_some();
-        let mut join =
-            action("join-friend", Action::Raised, &t).child(label(tr("Join").to_string()));
-        if can_play && valid {
-            join = join.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.join_friend();
-                cx.notify();
-            }));
-        } else {
-            join = disabled(join);
-        }
-        div()
-            .relative()
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .child(field)
-            .child(join)
-    }
 }
 
 impl Launcher {
@@ -428,7 +180,7 @@ impl Launcher {
             return None;
         };
         let (since, from) = match self.download_seen {
-            // A new download (Java's after the game's) starts counting again.
+            // A new Java download starts counting again.
             Some(seen) if seen.1 <= done => seen,
             _ => {
                 self.download_seen = Some((Instant::now(), done));
@@ -439,23 +191,15 @@ impl Launcher {
     }
 
     /// Under Play while it prepares: a bar, what is happening and the time left, and the steps,
-    /// the one under way lit, those done ticked. `version`: the Minecraft it downloads.
-    pub(super) fn steps(&self, version: &str, left: Option<Duration>) -> Div {
+    /// the one under way lit, those done ticked.
+    pub(super) fn steps(&self, left: Option<Duration>) -> Div {
         let t = self.theme;
         let n = t.night;
         let now = backend::prepare_step();
         let download = download_progress();
         let doing = match (download, now) {
-            (Some((done, total)), backend::PrepareStep::Files) => trf(
-                "Downloading Minecraft {version} from Mojang · {done} of {total} files",
-                &[
-                    ("version", version),
-                    ("done", &thousands(done as u64)),
-                    ("total", &thousands(total as u64)),
-                ],
-            ),
             (Some((done, total)), _) => trf(
-                "Downloading from Mojang · {done} of {total} files",
+                "Downloading Minecraft's Java from Mojang · {done} of {total} files",
                 &[
                     ("done", &thousands(done as u64)),
                     ("total", &thousands(total as u64)),
@@ -541,8 +285,8 @@ impl Launcher {
     }
 }
 
-/// `HORIZON_LAUNCHER_PAGE=getting-ready` opens Home as if Play had been pressed on a version that
-/// downloads from Mojang, a third of the way through: for screenshots, nothing runs.
+/// `HORIZON_LAUNCHER_PAGE=getting-ready` opens Home as if Play had been pressed and the game's
+/// Java were a third of the way through its download: for screenshots, nothing runs.
 pub(super) fn getting_ready_preview() -> bool {
     static PREVIEW: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *PREVIEW

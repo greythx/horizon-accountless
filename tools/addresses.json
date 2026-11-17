@@ -66,10 +66,6 @@
     "crates/horizon-telemetry-server/src/github.rs github.com",
     "crates/horizon-telemetry-server/src/lib.rs playhorizon.dev",
     "launcher/src/backend.rs api.github.com",
-    "launcher/src/backend.rs discord.gg",
-    "launcher/src/backend.rs github.com",
-    "launcher/src/backend.rs playhorizon.dev",
-    "launcher/src/backend.rs raw.githubusercontent.com",
     "launcher/src/browser.rs modrinth.com",
     "launcher/src/browser/curseforge.rs api.curseforge.com",
     "launcher/src/browser/download.rs cdn.modrinth.com",
@@ -96,7 +92,7 @@
     "launcher/src/github_mods.rs github.com",
     "launcher/src/github_mods.rs www.github.com",
     "launcher/src/github_mods_page.rs github.com",
-    "launcher/src/installer.rs playhorizon.dev",
+    "launcher/src/installer.rs github.com",
     "launcher/src/internet.rs login.tailscale.com",
     "launcher/src/loaders.rs meta.fabricmc.net",
     "launcher/src/loaders.rs meta.quiltmc.org",
@@ -108,14 +104,11 @@
     "launcher/src/native_mods.rs codeload.github.com",
     "launcher/src/native_mods.rs github.com",
     "launcher/src/native_mods.rs raw.githubusercontent.com",
-    "launcher/src/partner.rs my.sculkhosting.com",
     "launcher/src/rust_toolchain.rs github.com",
     "launcher/src/rust_toolchain.rs static.rust-lang.org",
-    "launcher/src/shop.rs playhorizon.dev",
     "launcher/src/signed.rs github.com",
     "launcher/src/tailscale.rs api.tailscale.com",
     "launcher/src/tailscale.rs login.tailscale.com",
-    "launcher/src/tailscale.rs tailscale.com",
-    "launcher/src/wardrobe.rs playhorizon.dev"
+    "launcher/src/tailscale.rs tailscale.com"
   ]
 }

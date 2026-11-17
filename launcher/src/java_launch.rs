@@ -4,8 +4,8 @@
 //! `minecraftArguments` line), an old version's natives unpacked into a folder of their own, and
 //! the logging setup Mojang gives (for 1.7 to 1.18, the one that keeps Log4Shell out).
 //!
-//! The files are where `mojang::download` puts them: `versions/`, `libraries/` and `assets/` in
-//! one game folder. Nothing here reaches the network.
+//! The files are ones the player's own launcher installed: `versions/`, `libraries/` and
+//! `assets/` in one game folder. Nothing here reaches the network.
 
 use crate::mojang;
 use serde_json::Value;
@@ -14,7 +14,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Who plays: the account's name, UUID, Minecraft access token and Xbox user id.
+/// Who plays: a name, UUID, Minecraft access token and Xbox user id. This fork has no accounts,
+/// so these are an offline placeholder's.
 pub struct Player {
     pub name: String,
     pub uuid: String,

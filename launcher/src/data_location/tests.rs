@@ -66,7 +66,11 @@ impl Fixture {
             build: temp.0.join("source").join(build),
         };
         for (root, name, bytes) in [
-            (&source.launcher, "accounts.json", &b"{\"accounts\":[]}"[..]),
+            (
+                &source.launcher,
+                "settings.json",
+                &b"{\"skip_opening\":true}"[..],
+            ),
             (
                 &source.game,
                 "saves/dummy/level.dat",
@@ -145,7 +149,7 @@ fn full_move_preserves_source_and_commits_separate_build() {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&f.source.launcher, fs::Permissions::from_mode(0o750)).unwrap();
         fs::set_permissions(
-            f.source.launcher.join("accounts.json"),
+            f.source.launcher.join("settings.json"),
             fs::Permissions::from_mode(0o640),
         )
         .unwrap();
@@ -160,7 +164,7 @@ fn full_move_preserves_source_and_commits_separate_build() {
                 0o750
             );
             assert_eq!(
-                fs::metadata(root.join("accounts.json"))
+                fs::metadata(root.join("settings.json"))
                     .unwrap()
                     .permissions()
                     .mode()

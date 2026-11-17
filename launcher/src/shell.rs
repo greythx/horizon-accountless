@@ -1,5 +1,5 @@
 //! The launcher's frame in the night look (docs/design-system.md, "Night"): the sidebar's plate
-//! and rows, and the top bar's tabs, icon buttons and account chip. The sky shows between them;
+//! and rows, and the top bar's tabs and icon buttons. The sky shows between them;
 //! only the sidebar and the selected or hovered parts are plates.
 use crate::plate::{alpha, cut};
 use crate::theme::{self, night, Step, Theme};
@@ -198,38 +198,6 @@ pub fn icon_button(
         ),
         t,
     )
-}
-
-/// The account chip's plate: `card` cut in one step with its stroke, for the picture and two
-/// lines that go in as children.
-pub fn chip(id: impl Into<SharedString>, t: &Theme) -> Stateful<Div> {
-    let id = id.into();
-    let n = t.night;
-    let d = div()
-        .id(id.clone())
-        .relative()
-        .flex()
-        .min_w_0()
-        .items_center()
-        .gap(px(10.))
-        .h(px(40.))
-        .pl(px(6.))
-        .pr(px(12.))
-        .cursor_pointer()
-        .child(
-            cut(
-                night::PIXEL_CORNER,
-                1,
-                Some(alpha(n.card, n.card_alpha)),
-                Some((alpha(n.stroke, n.stroke_alpha), 1.)),
-            )
-            .absolute()
-            .top_0()
-            .left_0()
-            .size_full(),
-        )
-        .child(hovered(&id, 1, t));
-    keyboard(track_hover(d, id), t)
 }
 
 /// What a night button is: the one main action (accent, cut in one step), a raised one

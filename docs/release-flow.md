@@ -1,5 +1,8 @@
 # Release flow
 
+> **In this fork:** this page documents upstream Horizon's release pipeline. This fork does not ship
+> releases (FORK.md); it merges from upstream, and its game-version list reads upstream's releases.
+
 How a change gets from a pull request to players: the checks a pull request passes, how it merges, and the
 automatic releases that follow. Releases are automatic and frequent so the latest Horizon is always playable.
 Since 2026-10-28 Horizon ships only the **Nightly** (Ludovic's decision; the Team proposed it): the batch train builds

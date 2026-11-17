@@ -4,38 +4,29 @@
 //! `SettingRow`s ([`glass_ui::flat_rows`]).
 //!
 //! Not in the mockup, kept in its patterns: the appearance, the Home background, the data and
-//! logs folders and the applications menu (About's rows), the AI clients, data collection (its own
-//! entry in the list) and the hidden developer options. The mockup's About tiles for Horizon and
-//! the launcher open Updates here, beside the switches that decide how updates install. The mockup's Native mods switch is the
+//! logs folders and the applications menu (About's rows), the AI clients and the hidden developer
+//! options. The mockup's Native mods switch is the
 //! native mods' build profile here: they are always on.
 
 use super::*;
 use crate::glass_ui::{self as ui, white};
 use horizon_theme::glass::{fill, ink, radius};
 
-/// The list's entries: name and icon. The mockup's seven, then data collection.
-const SECTIONS: [(&str, &str); 8] = [
-    ("Account", "user"),
-    ("Updates", "refresh"),
+/// The list's entries: name and icon.
+const SECTIONS: [(&str, &str); 5] = [
     ("Launcher", "computer"),
     ("Network", "globe-02"),
     ("Game", "game-controller-01"),
     ("AI", "ai-chat-02"),
     ("About", "information-circle"),
-    ("Data collection", "view"),
 ];
 
 /// What `settings_page` builds before it knows which look draws it.
 pub(super) struct Built {
-    pub install: Stateful<Div>,
     pub prune: Stateful<Div>,
     pub opening: Stateful<Div>,
     pub menu_entry: Stateful<Div>,
     pub appearance: AnyElement,
-    pub horizon: String,
-    pub horizon_action: Option<AnyElement>,
-    pub launcher: String,
-    pub launcher_action: Option<AnyElement>,
 }
 
 /// A section's card (`hzl-glass rounded-[20px] p-2`).
@@ -44,32 +35,6 @@ fn card() -> Div {
         .flex()
         .flex_col()
         .p(px(8.))
-}
-
-/// A tile (the mockup's `AboutTile`, `rounded-[14px] bg-white/[0.045] p-5`): its lead, name, a
-/// line under it and what it does.
-fn tile(lead: AnyElement, title: String, note: String, action: AnyElement) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .flex_1()
-        .min_w(px(140.))
-        .rounded(px(radius::LARGE))
-        .bg(white(0.045))
-        .p(px(20.))
-        .child(div().child(lead))
-        .child(
-            ui::text(15., FontWeight::SEMIBOLD, ink::FULL)
-                .mt(px(16.))
-                .child(title),
-        )
-        .child(
-            ui::text(13., FontWeight::NORMAL, 0.6)
-                .mt(px(2.))
-                .truncate()
-                .child(note),
-        )
-        .child(div().mt(px(16.)).flex().items_start().child(action))
 }
 
 /// The scroll spy: which section is being read, given each section's top from the pane's top
@@ -216,7 +181,7 @@ impl Launcher {
             .h_full()
             .child(ui::page_head(
                 tr("Settings"),
-                tr("Accounts, updates, and the launcher itself."),
+                tr("The launcher, its network, the game it starts, and what it can do."),
             ))
             .child(content)
     }
@@ -315,112 +280,10 @@ impl Launcher {
         )
     }
 
-    /// Updates' two tiles (the mockup's `AboutTile`s): Horizon and its update, the launcher and its
-    /// own.
-    fn update_tiles(
-        &mut self,
-        horizon: String,
-        horizon_action: Option<AnyElement>,
-        launcher: String,
-        launcher_action: Option<AnyElement>,
-    ) -> Div {
-        let installed = self
-            .settings
-            .selected
-            .clone()
-            .map(|tag| match &self.releases {
-                Load::Ready(list) => list
-                    .iter()
-                    .find(|r| r.tag == tag)
-                    .map_or(tag.clone(), |r| update_name(r).to_owned()),
-                _ => tag,
-            });
-        let tone = if self.updates.horizon.is_some() {
-            ui::Tone::Accent(ui::look().accent_soft)
-        } else if self.update_error.is_some() {
-            ui::Tone::Warn
-        } else if self.checked.is_some() {
-            ui::Tone::Live
-        } else {
-            ui::Tone::Busy
-        };
-        let ink = match tone {
-            ui::Tone::Live => ui::live(),
-            ui::Tone::Warn => ui::warn(),
-            _ => white(0.7),
-        };
-        let status = div()
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .text_size(px(13.))
-            .text_color(ink)
-            .child(ui::dot(tone))
-            .child(div().min_w_0().truncate().child(horizon));
-        let launcher_mark = div()
-            .flex()
-            .items_center()
-            .justify_center()
-            .size(px(42.))
-            .rounded(px(11.))
-            .bg(white(0.08))
-            .child(ui::icon("computer", 21., white(0.8)))
-            .into_any_element();
-        let wide = self.window_width >= crate::glass_home::SIDE_BY_SIDE;
-        div()
-            .flex()
-            .when(wide, |d| d.flex_row())
-            .when(!wide, |d| d.flex_col())
-            .gap(px(8.))
-            .child(tile(
-                self.horizon_mark(42.),
-                "Horizon".into(),
-                installed.unwrap_or_else(|| tr("Nightly").to_string()),
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_start()
-                    .gap(px(12.))
-                    .child(status)
-                    .children(horizon_action)
-                    .into_any_element(),
-            ))
-            .child(tile(
-                launcher_mark,
-                tr("Launcher").to_string(),
-                launcher,
-                div().children(launcher_action).into_any_element(),
-            ))
-    }
-
     /// The cards, one per entry of [`SECTIONS`], in its order.
     fn glass_settings_sections(&mut self, b: Built, cx: &mut Context<Self>) -> Vec<Div> {
         let t = self.theme;
         let n = 0;
-        let account = card().child(self.glass_account(cx));
-        let updates = card()
-            .child(self.update_tiles(b.horizon, b.horizon_action, b.launcher, b.launcher_action))
-            .child(index_row(
-                0,
-                tr("Install new versions automatically"),
-                note("Your selected version only changes if you were playing the newest one."),
-                Some(b.install.into_any_element()),
-                &t,
-            ))
-            .child(index_row(
-                0,
-                tr("Delete old versions automatically"),
-                Some(
-                    div()
-                        .child(trf(
-                            "Keeps the {count} newest, the one in use and the ones your instances use. Deleted versions install again from the Versions page.",
-                            &[("count", &self.settings.keep_newest().to_string())],
-                        ))
-                        .into_any_element(),
-                ),
-                Some(b.prune.into_any_element()),
-                &t,
-            ));
         let launcher = card()
             .child(index_row(
                 0,
@@ -449,6 +312,22 @@ impl Launcher {
         let game = card()
             .child(self.game_architecture_row(n, cx))
             .child(self.game_args_row(n + 1, cx))
+            .child(
+                index_row(
+                    n + 2,
+                    tr("Delete old versions automatically"),
+                    Some(
+                        div()
+                            .child(trf(
+                                "Keeps the {count} newest, the one in use and the ones your instances use. Deleted versions install again from the Versions page.",
+                                &[("count", &self.settings.keep_newest().to_string())],
+                            ))
+                            .into_any_element(),
+                    ),
+                    Some(b.prune.into_any_element()),
+                    &t,
+                ),
+            )
             .child(self.mods_auto_update_row(cx))
             .child(self.native_mods_row(cx));
         let ai = card()
@@ -495,8 +374,7 @@ impl Launcher {
                     &t,
                 ))
             });
-        let data = card().child(self.collection_section(cx));
-        vec![account, updates, launcher, network, game, ai, about, data]
+        vec![launcher, network, game, ai, about]
     }
 }
 
@@ -504,11 +382,11 @@ impl Launcher {
 mod tests {
     use super::spy;
 
-    /// A 600 px pane over the mockup's eight cards: tall ones, then About and Data collection,
+    /// A 600 px pane over the mockup's five cards: tall ones, then the short AI and About,
     /// too short for their tops ever to reach 30 % of the pane.
-    const TOPS: [f32; 8] = [0., 420., 700., 1000., 1300., 1600., 1900., 2100.];
+    const TOPS: [f32; 5] = [0., 420., 700., 1000., 1300.];
     const HEIGHT: f32 = 600.;
-    const MAX: f32 = 2300. - HEIGHT;
+    const MAX: f32 = 1900. - HEIGHT;
 
     fn at(scrolled: f32) -> usize {
         let tops: Vec<f32> = TOPS.iter().map(|t| t - scrolled).collect();
@@ -521,15 +399,11 @@ mod tests {
         assert_eq!(
             at(300.),
             1,
-            "Updates' top is 120 px down: in the upper 30 %"
+            "the second card's top is 120 px down: in the upper 30 %"
         );
         assert_eq!(at(600.), 2);
-        assert_eq!(
-            at(1000.),
-            3,
-            "Network's top at the pane's top, Game's 300 px down"
-        );
-        assert_eq!(at(1150.), 4, "Game's top 150 px down: in the upper 30 %");
+        assert_eq!(at(880.), 3);
+        assert_eq!(at(1150.), 4, "the last card's top in the upper 30 %");
     }
 
     #[test]
@@ -541,11 +415,11 @@ mod tests {
         // Every section is marked on the way down, in order, never skipped.
         let mut order = seen.clone();
         order.dedup();
-        assert_eq!(order, (0..8).collect::<Vec<_>>());
+        assert_eq!(order, (0..5).collect::<Vec<_>>());
         // About is marked for a stretch of scroll before the end, not for one step.
-        let about = seen.iter().filter(|&&s| s == 6).count();
+        let about = seen.iter().filter(|&&s| s == 4).count();
         assert!(about >= 8, "About marked for {about} steps of 10 px");
-        assert_eq!(at(MAX), 7);
+        assert_eq!(at(MAX), 4);
     }
 
     #[test]

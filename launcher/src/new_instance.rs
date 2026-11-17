@@ -1,7 +1,7 @@
 //! New instance's kinds (docs/design-system.md, "Night"; plan R0, screen 4): Horizon, Vanilla
 //! (Minecraft: Java Edition as Mojang ships it) and Modded (with Fabric, Quilt, Forge or NeoForge). A Java kind picks
 //! its version from Mojang's public list (`minecraft_versions`), fetched once when the dialog first
-//! needs it; the game itself comes with the first Play, for an account that owns it.
+//! needs it; the game itself comes from the player's own install, used on the first Play.
 use super::*;
 use crate::plate::alpha;
 use crate::shell::{c, Action};
@@ -430,7 +430,7 @@ impl Launcher {
             }
         }
         rows.child(shell::text(night::CAPTION, c(n.muted)).child(
-            tr("Play downloads the game from Mojang for your account the first time, with the Java it needs.")
+            tr("Play starts the game from your own install the first time, with the Java it needs.")
                 .to_string(),
         ))
     }

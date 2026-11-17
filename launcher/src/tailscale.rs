@@ -4,7 +4,7 @@
 //!
 //! The launcher never signs in for anyone and never uses Funnel: signing in happens in Tailscale's own app
 //! or page, and the access token is one the player makes in the admin console and pastes here (it is
-//! kept in the system keychain). `HORIZON_LAUNCHER_TAILSCALE` (the CLI) and `HORIZON_TAILSCALE_API` (the
+//! kept in a 0600 file, `secrets.json`, in the launcher's data folder). `HORIZON_LAUNCHER_TAILSCALE` (the CLI) and `HORIZON_TAILSCALE_API` (the
 //! API's address) point the tests at stand-ins.
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -17,7 +17,7 @@ pub const ADMIN: &str = "https://login.tailscale.com/admin";
 pub const KEYS: &str = "https://login.tailscale.com/admin/settings/keys";
 /// The access controls page.
 pub const ACCESS: &str = "https://login.tailscale.com/admin/acls/file";
-/// The keychain entry of the player's API access token.
+/// The secrets-file key of the player's API access token.
 pub const TOKEN_KEY: &str = "tailscale-api-token";
 
 /// Where to download Tailscale for this system.

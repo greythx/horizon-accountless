@@ -3,7 +3,7 @@
 //! `.zip` of the game folder's layout.
 //!
 //! Only what makes the instance goes in, from a fixed list ([`FILES`], [`FOLDERS`]): never logs,
-//! screenshots, backups, caches, or anything tied to the player's account. A world goes without
+//! screenshots, backups, caches, or anything tied to a player's local state. A world goes without
 //! its per-player files (`playerdata/`, `stats/`, `advancements/`) and its level.dat without the
 //! player's UUID.
 //!

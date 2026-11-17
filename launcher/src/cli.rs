@@ -1,7 +1,6 @@
 //! `horizon-launcher <subcommand>`: the same steps as the window, from a terminal. Every
 //! command goes through `backend`; this file only parses arguments and prints.
 use clap::{Parser, Subcommand};
-use horizon_launcher::account::{self, Accounts};
 use horizon_launcher::backend::{self, Release};
 use horizon_launcher::build_import;
 use horizon_launcher::github_mods;
@@ -72,12 +71,9 @@ enum ServersCmd {
         /// Let anyone in (no whitelist)
         #[arg(long)]
         open: bool,
-        /// Do not check players' Minecraft accounts (offline mode: anyone can use any name)
+        /// Deprecated no-op: this fork's servers always run offline
         #[arg(long)]
         offline: bool,
-        /// Kept for old scripts: account checking is now the default
-        #[arg(long, hide = true, conflicts_with = "offline")]
-        check_accounts: bool,
         /// Who may join (repeatable); the first becomes an operator
         #[arg(long = "player")]
         players: Vec<String>,
@@ -102,70 +98,6 @@ enum ServersCmd {
     },
     /// Take a server off the list (its folder stays)
     Forget { server: String },
-}
-
-#[derive(Subcommand)]
-enum AccountCmd {
-    /// The signed-in accounts and which one plays
-    List,
-    /// Sign in with a Microsoft account in your browser (device code). Play needs one that owns
-    /// Minecraft: Java Edition
-    SignIn {
-        /// Sign this account (name or UUID) in again: another Microsoft account is refused and
-        /// who plays stays the same
-        #[arg(long = "for")]
-        target: Option<String>,
-    },
-    /// Renew an account's session now, even when its access token is still fresh
-    Refresh { who: String },
-    /// Renew an account's session for a game already running: prints the read-once session file
-    /// it hands over (`--json`: {"session_file"} or {"authentication"} when it can't)
-    Session { who: String },
-    /// Sign out: the account's tokens leave the keychain (and the secrets file, where it kept them)
-    SignOut {
-        /// Its name or UUID
-        who: String,
-    },
-    /// Play as this account
-    Select { who: String },
-}
-
-#[derive(Subcommand)]
-enum DataCmd {
-    /// What is allowed, the install ID and how many items wait (the default)
-    Status,
-    /// Turn kinds on: performance, crashes, bugs, benchmarks, or all
-    Allow {
-        #[arg(required = true)]
-        kinds: Vec<String>,
-    },
-    /// Turn kinds off: performance, crashes, bugs, benchmarks, or all
-    Deny {
-        #[arg(required = true)]
-        kinds: Vec<String>,
-    },
-    /// Print exactly what would be sent
-    Show,
-    /// Delete everything sent from here, and what waits, and take a new install ID
-    Delete,
-    /// Send what is waiting now
-    Send,
-    /// Send a bug report you write; it is printed first, as it would leave
-    Bug {
-        text: String,
-        /// Add the end of the game's log (scrubbed, without chat)
-        #[arg(long)]
-        log: bool,
-        /// Send without asking
-        #[arg(long)]
-        yes: bool,
-    },
-    /// Upload a benchmark report (docs/benchmark-report.md); it is printed first
-    Benchmark {
-        file: PathBuf,
-        #[arg(long)]
-        yes: bool,
-    },
 }
 
 #[derive(Subcommand)]
@@ -271,11 +203,11 @@ enum InstanceCmd {
     },
     /// Make Play start this instance
     Select { instance: String },
-    /// Keep an instance on one installed Horizon version, or "latest" to follow updates again
+    /// Keep an instance on one installed Horizon version, or "latest" to follow the launcher's selection
     Version { instance: String, version: String },
     /// Export an instance (or a port) to share: its settings, packs, Horizon mods and the worlds
     /// named, as a .mrpack (resource packs from Modrinth listed by download) or a zip. Never
-    /// logs, screenshots or account data; worlds go without their per-player files
+    /// logs, screenshots or personal session files; worlds go without their per-player files
     Export {
         /// The instance (default: the selected one)
         instance: Option<String>,
@@ -704,26 +636,23 @@ enum Cmd {
         #[arg(long)]
         trust_unsigned: bool,
     },
-    /// Prepare a version's resources from your own Minecraft install, or from Mojang
+    /// Prepare a version's resources from your own Minecraft install
     Prepare {
         /// The game folder of the official launcher, Prism Launcher, MultiMC, the Modrinth App,
         /// ATLauncher or GDLauncher (default: the launcher's, then every launcher's default)
-        #[arg(long, conflicts_with = "download")]
-        minecraft: Option<PathBuf>,
-        /// Download Minecraft from Mojang for the signed-in account that owns it, instead of
-        /// using an install
         #[arg(long)]
-        download: bool,
+        minecraft: Option<PathBuf>,
         /// The installed version (default: the selected one)
         #[arg(long)]
         version: Option<String>,
     },
-    /// Start the client (needs a signed-in Microsoft account that owns Minecraft: Java Edition)
+    /// Start the client (offline)
     Play {
         #[arg(long)]
         version: Option<String>,
         /// The instance to play (its name or id; default: the selected one). A Java instance
-        /// starts its Minecraft: Java Edition, downloaded with its Java the first time
+        /// starts its Minecraft: Java Edition from your own install, with its Java downloaded
+        /// the first time
         #[arg(long)]
         instance: Option<String>,
         /// Open or create this world (a folder under saves) at once
@@ -732,20 +661,13 @@ enum Cmd {
         /// Creative mode for a new world
         #[arg(long)]
         creative: bool,
-        /// Join a friend's world with its invite code
-        #[arg(long)]
-        join: Option<String>,
         /// Join this server at once: an address, or a server of the list by name or position
-        #[arg(long, conflicts_with_all = ["world", "join"])]
+        #[arg(long, conflicts_with = "world")]
         server: Option<String>,
         /// An extra argument for the game, passed through as-is (repeatable), for example
         /// --server-thread
         #[arg(long = "arg", value_name = "ARG", allow_hyphen_values = true)]
         arg: Vec<String>,
-        /// Play this launch as this signed-in account (its name or UUID), without changing
-        /// the one `account select` picked: several games can play as several accounts at once
-        #[arg(long, value_name = "WHO")]
-        account: Option<String>,
     },
     /// Run a dedicated server here; type commands into its console
     Server {
@@ -813,17 +735,10 @@ enum Cmd {
     },
     /// Show a release's patch notes (default: the newest)
     Notes { tag: Option<String> },
-    /// Show the Discord, sponsor and website links
-    Links,
-    /// Microsoft accounts: list them (the default), sign in, sign out, or pick the one that plays
-    Account {
-        #[command(subcommand)]
-        action: Option<AccountCmd>,
-    },
     /// Show the launcher's settings, or set one (the Settings page): selected-version TAG,
     /// game-architecture auto|x64|arm64,
-    /// minecraft-dir PATH, server-dir PATH ("default" resets a folder), install-new-versions
-    /// on|off, prune-old-versions on|off (delete old versions after an install, keeping the
+    /// minecraft-dir PATH, server-dir PATH ("default" resets a folder),
+    /// prune-old-versions on|off (delete old versions after an install, keeping the
     /// selected one, the ones instances use and the newest few), keep-versions N (how many of the
     /// newest to keep; "default" is 2), opening-animation on|off, proxy http://host:port|socks5://host:port
     /// ("default" removes it), while-playing stay|minimize|hide (what the window does while the game runs), language
@@ -850,7 +765,7 @@ enum Cmd {
     },
     /// Upload an instance's latest.log to mclo.gs (a paste service for Minecraft logs) and print
     /// its link, for a bug report: only when the player asks. The home folder, the user name and
-    /// the account names are taken out first; the link expires after 90 days unread
+    /// the player name are taken out first; the link expires after 90 days unread
     ShareLog {
         /// The instance (default: the selected one)
         #[arg(long)]
@@ -868,24 +783,12 @@ enum Cmd {
         #[arg(long)]
         crash: bool,
     },
-    /// Look for a newer Horizon release and launcher, and install them
-    Update {
-        /// Only report what is available
-        #[arg(long)]
-        check: bool,
-    },
     /// Linux: put Horizon in the applications menu (an entry and the icon, under
     /// $XDG_DATA_HOME), or take it out with --remove
     DesktopEntry {
         /// Remove the entry and the icon, and stop adding them back
         #[arg(long)]
         remove: bool,
-    },
-    /// Opt-in data collection (docs/telemetry.md): what is allowed, what would be sent, and
-    /// deleting it; all off until you allow a kind
-    Data {
-        #[command(subcommand)]
-        action: Option<DataCmd>,
     },
     /// Instances: separate game folders, each with its own worlds, options and packs
     Instance {
@@ -981,11 +884,10 @@ pub fn command() -> clap::Command {
 pub const AI_COMMANDS: [&str; 2] = ["mcp", "agent-config"];
 
 /// The keys `settings` sets.
-const SETTING_KEYS: [&str; 15] = [
+const SETTING_KEYS: [&str; 14] = [
     "selected-version",
     "minecraft-dir",
     "server-dir",
-    "install-new-versions",
     "prune-old-versions",
     "keep-versions",
     "opening-animation",
@@ -1013,7 +915,6 @@ fn set_setting(s: &mut backend::Settings, key: &str, value: &str) -> Result<(), 
         "selected-version" => s.selected = Some(backend::resolve_version(Some(value))?),
         "minecraft-dir" => s.minecraft_dir = folder(value),
         "server-dir" => s.server_dir = folder(value),
-        "install-new-versions" => s.install_new_versions = Some(on_off(value)?),
         "prune-old-versions" => s.prune_old_versions = Some(on_off(value)?),
         "keep-versions" => {
             s.keep_versions = match value {
@@ -1117,7 +1018,6 @@ fn settings_json(s: &backend::Settings) -> serde_json::Value {
         "game_architecture": s.game_architecture.name(),
         "minecraft_dir": s.minecraft_dir,
         "server_dir": backend::server_dir(None),
-        "install_new_versions": s.install_new_versions.unwrap_or(true),
         "prune_old_versions": s.auto_prune(),
         "keep_versions": s.keep_newest(),
         "opening_animation": !s.skip_opening,
@@ -1150,13 +1050,7 @@ pub fn run() -> Option<i32> {
     let result = match command {
         Cmd::Mcp | Cmd::AgentConfig { .. } if no_ai => Err(horizon_platform::no_ai::REFUSAL.into()),
         Cmd::Mcp => crate::mcp::serve(),
-        command => {
-            let result = execute(command, cli.json);
-            // A game it started has ended (attached) or none did (an error): a session file it
-            // didn't read goes now.
-            account::discard_unread_sessions();
-            result
-        }
+        command => execute(command, cli.json),
     };
     Some(match result {
         Ok(()) => 0,
@@ -1209,7 +1103,7 @@ fn release_json(r: &Release) -> serde_json::Value {
 }
 
 fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
-    if matches!(command, Cmd::Versions { .. } | Cmd::Update { .. }) {
+    if matches!(command, Cmd::Versions { .. }) {
         for (tag, from) in backend::reuse_prepared_everywhere() {
             if !as_json {
                 eprintln!("Prepared {tag} with the resources of {from}.");
@@ -1267,7 +1161,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
         }
         Cmd::Install { tag } => {
             let label = format!("Installing {tag}");
-            let tag = backend::install_tag(&tag, false, progress(label))?;
+            let tag = backend::install_tag(&tag, progress(label))?;
             if as_json {
                 json(
                     serde_json::json!({ "installed": tag, "prepared": backend::check_prepared(&tag) }),
@@ -1429,20 +1323,11 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 println!("Imported {tag} and selected it. Prepare it next: horizon-launcher prepare --version {tag}");
             }
         }
-        Cmd::Prepare {
-            minecraft,
-            download,
-            version,
-        } => {
+        Cmd::Prepare { minecraft, version } => {
             let tag = backend::resolve_version(version.as_deref())?;
             let minecraft = backend::minecraft_dir(minecraft)?;
-            let from = if download {
-                backend::MinecraftFrom::Mojang
-            } else {
-                backend::MinecraftFrom::Install
-            };
             let (preparer, minecraft) =
-                backend::preparer(&tag, &minecraft, from, &|line| eprintln!("{line}"))?;
+                backend::preparer(&tag, &minecraft, &|line| eprintln!("{line}"))?;
             backend::sounds(&tag, &minecraft, &|line| println!("{line}"));
             match preparer {
                 backend::Preparer::Process(cmd) => attached(cmd)?,
@@ -1457,25 +1342,18 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
             instance,
             world,
             creative,
-            join,
             server,
             arg,
-            account,
         } => {
             let instance = match instance {
                 Some(name) => instances::find(&name)?,
                 None => instances::selected(),
             };
             if instance.java.is_some() {
-                if version.is_some()
-                    || world.is_some()
-                    || join.is_some()
-                    || creative
-                    || account.is_some()
-                {
+                if version.is_some() || world.is_some() || creative {
                     return Err(format!(
-                        "{} plays Minecraft: Java Edition: --version, --world, --creative, \
-                         --join and --account are for Horizon instances.",
+                        "{} plays Minecraft: Java Edition: --version, --world and --creative are \
+                         for Horizon instances.",
                         instance.name
                     ));
                 }
@@ -1485,9 +1363,6 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 });
                 let mut cmd =
                     backend::java_game(&instance, server.as_deref(), &|line| eprintln!("{line}"))?;
-                if let Some(e) = account::take_unsaved() {
-                    eprintln!("{e}");
-                }
                 cmd.args(arg);
                 let vars = instance.vars(cmd.get_program());
                 cmd.envs(vars.iter().map(|(k, v)| (k, v)));
@@ -1499,27 +1374,8 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 after_exit(&instance, &vars);
                 return played;
             }
-            // Who plays this launch only.
-            let who = match account {
-                Some(who) => Some(
-                    Accounts::load()
-                        .find(&who)
-                        .ok_or_else(|| {
-                            format!("No signed-in account {who}. See `horizon-launcher account`.")
-                        })?
-                        .uuid
-                        .clone(),
-                ),
-                None => None,
-            };
-            let mut cmd = backend::client_as(
-                &instance.resolve_version(version.as_deref())?,
-                who.as_deref(),
-            )?;
+            let mut cmd = backend::client(&instance.resolve_version(version.as_deref())?)?;
             instances::apply(&mut cmd, &instance)?;
-            if let Some(code) = join {
-                backend::join_friend(&mut cmd, &code)?;
-            }
             if let Some(world) = world {
                 cmd.arg("--world").arg(world);
             }
@@ -1568,27 +1424,12 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 );
             }
         }
-        Cmd::Account { action } => account_command(action.unwrap_or(AccountCmd::List), as_json)?,
         Cmd::Benchmark { repeats } => {
             let path = crate::perf::benchmark(repeats.max(1))?;
             if as_json {
                 json(serde_json::json!({ "report": path }));
             } else {
                 println!("{}", path.display());
-            }
-        }
-        Cmd::Links => {
-            let links = backend::links();
-            if as_json {
-                json(serde_json::to_value(&links).unwrap());
-            } else {
-                for (name, url) in [
-                    ("Discord", &links.discord),
-                    ("Sponsor", &links.sponsor),
-                    ("Website", &links.website),
-                ] {
-                    println!("{name:<8} {}", if url.is_empty() { "(none)" } else { url });
-                }
             }
         }
         Cmd::NoAi { state } => {
@@ -1723,8 +1564,6 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 print!("{text}");
             }
         }
-        Cmd::Update { check } => update(check, as_json)?,
-        Cmd::Data { action } => data(action.unwrap_or(DataCmd::Status), as_json)?,
         Cmd::DesktopEntry { remove } => {
             let mut settings = backend::Settings::load();
             settings.desktop_entry = Some(!remove);
@@ -1852,253 +1691,6 @@ fn rust(action: RustCmd, as_json: bool) -> Result<(), String> {
     Ok(())
 }
 
-fn update(check: bool, as_json: bool) -> Result<(), String> {
-    let updates = backend::check_updates()?;
-    if as_json && check {
-        json(serde_json::json!({
-            "horizon": updates.horizon.as_ref().map(|r| &r.tag),
-            "launcher": updates.launcher.as_ref().and_then(|r| backend::launcher_version(&r.tag)),
-            "launcher_current": backend::VERSION,
-        }));
-        return Ok(());
-    }
-    match &updates.horizon {
-        None => println!("Horizon: up to date."),
-        Some(r) if check => println!("Horizon: {} is available.", r.tag),
-        Some(r) => {
-            let tag =
-                backend::install_tag(&r.tag, true, progress(format!("Installing {}", r.tag)))?;
-            println!("Horizon: installed {tag}.");
-        }
-    }
-    match &updates.launcher {
-        None => println!("Launcher: {} is up to date.", backend::VERSION),
-        Some(r) => {
-            let version = backend::launcher_version(&r.tag).unwrap_or_default();
-            if check {
-                println!(
-                    "Launcher: {version} is available (this is {}).",
-                    backend::VERSION
-                );
-            } else if !backend::self_update_allowed() {
-                println!("Launcher: {version} is available; this build does not replace itself.");
-            } else {
-                backend::self_update(r, progress(format!("Updating the launcher to {version}")))?;
-                println!("Launcher: updated to {version}. Restart the launcher to use it.");
-            }
-        }
-    }
-    Ok(())
-}
-
-/// `account …`: names and UUIDs only; tokens are never printed.
-fn account_command(action: AccountCmd, as_json: bool) -> Result<(), String> {
-    let mut accounts = Accounts::load();
-    let find = |accounts: &Accounts, who: &str| {
-        accounts
-            .find(who)
-            .cloned()
-            .ok_or_else(|| format!("No signed-in account {who}. See `horizon-launcher account`."))
-    };
-    match action {
-        AccountCmd::List => {
-            if as_json {
-                json(serde_json::json!({
-                    "accounts": accounts.accounts.iter().map(|a| serde_json::json!({
-                        "name": a.name, "uuid": a.uuid,
-                        "selected": accounts.selected.as_ref() == Some(&a.uuid),
-                        "authentication": account::session::status(account::store(), &a.uuid),
-                    })).collect::<Vec<_>>(),
-                    "sign_in_configured": account::client_id().is_some(),
-                    "owner": accounts.has_owner(account::store()),
-                }));
-            } else if accounts.accounts.is_empty() {
-                println!(
-                    "No Microsoft account signed in. Play needs one that owns Minecraft: Java \
-                     Edition: horizon-launcher account sign-in"
-                );
-            } else {
-                for a in &accounts.accounts {
-                    let mark = if accounts.selected.as_ref() == Some(&a.uuid) {
-                        "*"
-                    } else {
-                        " "
-                    };
-                    let status = account::session::status(account::store(), &a.uuid);
-                    // Why it couldn't be checked (a keyring that didn't answer, #12179).
-                    let why = match status.state {
-                        account::session::State::Retry => format!(": {}", status.message),
-                        _ => String::new(),
-                    };
-                    println!("{mark} {}  {}  {}{why}", a.name, a.uuid, status.label());
-                }
-                if !accounts.has_owner(account::store()) {
-                    println!(
-                        "{} {}",
-                        account::NoOwner::default(),
-                        tr(backend::SIGN_IN_HINT)
-                    );
-                }
-            }
-        }
-        AccountCmd::Refresh { who } => {
-            let status = account::session::refresh(&who)?;
-            if as_json {
-                json(serde_json::to_value(&status).map_err(|e| e.to_string())?);
-            } else if status.state != account::session::State::Ready {
-                return Err(format!("{}: {}", status.label(), status.message));
-            } else {
-                println!("{}: {}", status.label(), status.message);
-            }
-        }
-        AccountCmd::Session { who } => {
-            let dir = backend::game_home().join("sessions");
-            match (account::session::renew_for_game(&dir, &who), as_json) {
-                (Ok(file), true) => json(serde_json::json!({ "session_file": file })),
-                (Ok(file), false) => println!("{}", file.display()),
-                (Err(status), true) => json(serde_json::json!({ "authentication": status })),
-                (Err(status), false) => return Err(status.message),
-            }
-        }
-        AccountCmd::SignIn { target: Some(who) } => {
-            let a = find(&accounts, &who)?;
-            let sign_in = account::SignIn::start_for(a.clone());
-            let mut shown = false;
-            let signed_in = loop {
-                match sign_in.state() {
-                    account::SignInState::Code(code) if !shown => {
-                        shown = true;
-                        if as_json {
-                            json(serde_json::json!({
-                                "link": code.verification_uri,
-                                "code": code.user_code,
-                            }));
-                        } else {
-                            eprintln!(
-                                "To sign {} in again, open {} in a browser and enter the code {}",
-                                a.name, code.verification_uri, code.user_code
-                            );
-                        }
-                    }
-                    account::SignInState::Done(result) => break result?,
-                    _ => {}
-                }
-                std::thread::sleep(std::time::Duration::from_millis(200));
-            };
-            if as_json {
-                json(serde_json::json!({ "signed_in": signed_in.uuid }));
-            } else {
-                println!("Signed in as {} again.", signed_in.name);
-            }
-        }
-        AccountCmd::SignIn { target: None } => {
-            let client_id = account::client_id().ok_or(account::NOT_CONFIGURED)?;
-            let ep = account::Endpoints::live();
-            let code = account::device_code(&ep, &client_id)?;
-            eprintln!(
-                "To sign in, open {} in a browser and enter the code {}",
-                code.verification_uri, code.user_code
-            );
-            let ms = account::wait_for_sign_in(&ep, &client_id, &code, &|| false)?;
-            let (signed_in, secrets) = account::finish_sign_in(&ep, ms)?;
-            accounts.add(account::store(), signed_in.clone(), &secrets)?;
-            accounts.save()?;
-            println!("Signed in as {}.", signed_in.name);
-            if let Some(said) = account::no_keychain() {
-                eprintln!("{said}");
-            }
-        }
-        AccountCmd::SignOut { who } => {
-            let a = find(&accounts, &who)?;
-            accounts.remove(account::store(), &a.uuid)?;
-            accounts.save()?;
-            println!("Signed out {}.", a.name);
-        }
-        AccountCmd::Select { who } => {
-            let a = find(&accounts, &who)?;
-            accounts.play_as(&a.uuid)?;
-            accounts.save()?;
-            println!("The game plays as {}.", a.name);
-        }
-    }
-    Ok(())
-}
-
-/// `data`: the same consent as Settings → Data collection.
-fn data(action: DataCmd, as_json: bool) -> Result<(), String> {
-    use horizon_launcher::telemetry;
-    let review = |item: &horizon_telemetry::Item, yes: bool| -> Result<bool, String> {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(item).map_err(|e| e.to_string())?
-        );
-        if yes {
-            return Ok(true);
-        }
-        if !std::io::stdin().is_terminal() {
-            return Err("Add --yes to send it without asking.".into());
-        }
-        eprint!("Send this? [y/N] ");
-        let mut line = String::new();
-        std::io::stdin()
-            .read_line(&mut line)
-            .map_err(|e| e.to_string())?;
-        Ok(line.trim().eq_ignore_ascii_case("y"))
-    };
-    match action {
-        DataCmd::Status => {
-            let status = telemetry::status_json();
-            if as_json {
-                json(status);
-                return Ok(());
-            }
-            let consent = telemetry::consent();
-            if consent.needs_asking() {
-                println!("Not answered yet: nothing is collected.");
-            }
-            for (kind, name, _) in telemetry::SWITCHES {
-                let on = consent.allows(kind);
-                println!("{name}: {}", if on { "on" } else { "off" });
-            }
-            println!("Waiting to be sent: {}", status["waiting"]);
-            match horizon_telemetry::endpoint() {
-                Some(url) => println!("Server: {url}"),
-                None => println!("Server: turned off (HORIZON_TELEMETRY_URL=off), nothing is sent"),
-            }
-        }
-        DataCmd::Allow { kinds } => {
-            telemetry::set(&telemetry::parse_kinds(&kinds)?, true)?;
-            return data(DataCmd::Status, as_json);
-        }
-        DataCmd::Deny { kinds } => {
-            telemetry::set(&telemetry::parse_kinds(&kinds)?, false)?;
-            return data(DataCmd::Status, as_json);
-        }
-        DataCmd::Show => {
-            let (what, text) = telemetry::preview();
-            eprintln!("{what}");
-            println!("{text}");
-        }
-        DataCmd::Delete => println!("{}", telemetry::delete_my_data()?),
-        DataCmd::Send => println!("{:?}", telemetry::send()),
-        DataCmd::Bug { text, log, yes } => {
-            telemetry::ensure_allowed(horizon_telemetry::Kind::Bug)?;
-            let item = telemetry::bug_report(&text, log)?;
-            if review(&item, yes)? {
-                println!("{}", telemetry::submit(&item)?);
-            }
-        }
-        DataCmd::Benchmark { file, yes } => {
-            telemetry::ensure_allowed(horizon_telemetry::Kind::Benchmark)?;
-            let item = telemetry::benchmark_report(&file)?;
-            if review(&item, yes)? {
-                println!("{}", telemetry::submit(&item)?);
-            }
-        }
-    }
-    Ok(())
-}
-
 fn servers(action: ServersCmd, as_json: bool) -> Result<(), String> {
     use horizon_launcher::servers::{self, NewServer, World};
     let find = |which: &str| {
@@ -2143,8 +1735,7 @@ fn servers(action: ServersCmd, as_json: bool) -> Result<(), String> {
             difficulty,
             max_players,
             open,
-            offline,
-            check_accounts: _,
+            offline: _,
             players,
             version,
             accept_eula,
@@ -2161,7 +1752,6 @@ fn servers(action: ServersCmd, as_json: bool) -> Result<(), String> {
                 difficulty,
                 max_players,
                 friends_only: !open,
-                check_accounts: !offline,
                 players,
                 eula: accept_eula,
             };
@@ -3691,15 +3281,6 @@ mod tests {
         );
         set_setting(&mut settings, "language", "system").unwrap();
         assert_eq!(settings.language, None);
-    }
-
-    #[test]
-    fn play_takes_an_account_for_one_launch() {
-        let cli = Cli::try_parse_from(["horizon-launcher", "play", "--account", "Alex"]).unwrap();
-        match cli.command {
-            Some(Cmd::Play { account, .. }) => assert_eq!(account.as_deref(), Some("Alex")),
-            _ => panic!("not play"),
-        }
     }
 
     #[test]
