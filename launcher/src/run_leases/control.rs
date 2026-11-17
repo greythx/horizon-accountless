@@ -1,5 +1,5 @@
 //! GUI process-group control and startup lifetime registration.
-use crate::backend::{self, Running};
+use crate::backend::Running;
 use std::io::Write;
 
 impl Running {
