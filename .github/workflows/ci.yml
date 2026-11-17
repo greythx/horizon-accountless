@@ -527,6 +527,17 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
         run: |
+          # Parity's runner holds Horizon's own vanilla 26.3 jars on infrastructure
+          # with access to them (docs/parity-workflow.md). This repository (greythx's
+          # MIT fork) has none of it: the harness job would sit queued on a runner
+          # that does not exist. Fork PRs therefore never schedule it; upstream's own
+          # PRs to horizon-rust/horizon still can. If this fork ever registers a
+          # horizon-game runner, delete this short-circuit.
+          if [ "$GITHUB_REPOSITORY" != "horizon-rust/horizon" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Not this fork's runner: parity never runs here (harnesses run upstream only)"
+            exit 0
+          fi
           changed=$(git diff --name-only "$(git merge-base "$BASE_SHA" HEAD)" HEAD)
           harness=$(grep -E '^(tools/test_[a-z0-9_]+_parity\.py|tools/(parity[a-z_]*|lab)\.py|tools/parity_hosts\.json|mods/horizon/src/test/|crates/[^/]+/examples/|crates/horizon-client/src/game/[a-z_]*(fixture|harness)\.rs|\.github/workflows/parity[a-z-]*\.yml)' <<< "$changed" || true)
           if [ -n "$harness" ] || [[ " $LABELS " == *" run-parity "* ]] || [[ " $LABELS " == *" frame-identity "* ]]; then
