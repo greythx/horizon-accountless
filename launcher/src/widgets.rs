@@ -476,60 +476,16 @@ pub(crate) fn segments<T: Copy + PartialEq + 'static>(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PlayPress {
     Play,
-    /// Not prepared, for an account that owns the game: prepare it (from the player's install,
-    /// else downloaded from Mojang for that account), then play, as the official launcher does.
+    /// Not prepared, for an account that owns the game: prepare it (from the player's own install),
+    /// then play. The fork does not ask the Microsoft accounts who plays: prepared state is all it
+    /// knows.
     PrepareThenPlay,
-    /// Not prepared and no owner (signing in comes first), or busy preparing or playing.
+    /// Not prepared and not allowed to prepare, or busy preparing or playing.
     Nothing,
 }
 
-/// Account state uses the same semantic colors as the launcher's other notices. Keep a
-/// distinct icon and the full label so color is never the only way to recognize a state.
-pub(crate) fn account_status_line(
-    status: Option<&account::session::Status>,
-    progress: Option<&str>,
-    t: &Theme,
-) -> Div {
-    use account::session::State;
-    let (icon, color, label) = if let Some(progress) = progress {
-        ("clock", t.muted, progress)
-    } else {
-        let (icon, color) = match status.map(|s| s.state) {
-            Some(State::Ready) => ("check", t.success),
-            Some(State::NeedsRefresh | State::Retry) => ("reload", t.warn),
-            Some(State::SignInRequired) => ("user", t.danger),
-            Some(State::OwnershipRequired) => ("info-box", t.danger),
-            None => ("info-box", t.muted),
-        };
-        (
-            icon,
-            color,
-            status.map_or("Sign-in not checked", |s| s.label()),
-        )
-    };
-    div()
-        .flex()
-        .items_center()
-        .gap(px(6.))
-        .text_color(color)
-        .child(blocks::icon(icon, 14., color))
-        .child(tr(label).to_owned())
-}
-
-/// Polling must handle each sign-in transition once. Replaying a completed sign-in
-/// restarts every account's status worker and leaves the UI perpetually checking.
-pub(crate) fn sign_in_change(
-    shown: &mut Option<SignInState>,
-    next: SignInState,
-) -> Option<SignInState> {
-    if shown.as_ref() == Some(&next) {
-        return None;
-    }
-    *shown = Some(next.clone());
-    Some(next)
-}
-
-/// `owner`: whether an account here owns the game, by the keychain (`Launcher::owner`).
+/// `owner`: whether this install may prepare and play (`Some(true)`), `Some(false)` refuses,
+/// `None` is unknown yet.
 pub(crate) fn play_press(prepared: bool, owner: Option<bool>, busy: bool) -> PlayPress {
     match (prepared, owner) {
         _ if busy => PlayPress::Nothing,
@@ -540,8 +496,8 @@ pub(crate) fn play_press(prepared: bool, owner: Option<bool>, busy: bool) -> Pla
 }
 
 /// What Play's button says for `press`, so its label is what a click does: "Prepare & play"
-/// when it prepares first, "Sign in to play" when no account here owns the game (it does
-/// nothing then), "Play" otherwise (dimmed while the keychain is still being read).
+/// when it prepares first, "Sign in to play" when not allowed (it does nothing then),
+/// "Play" otherwise (dimmed while the state is still being read).
 pub(crate) fn play_label(press: PlayPress, owner: Option<bool>) -> &'static str {
     match (press, owner) {
         (PlayPress::PrepareThenPlay, _) => "Prepare & play",
@@ -700,25 +656,6 @@ pub(crate) fn slot_row(
                 })),
         )
         .children(right)
-}
-
-/// Microsoft account actions go below the profile in the fixed-width glass card.
-pub(crate) fn account_row(
-    slot: Option<Div>,
-    name: impl IntoElement,
-    detail: Option<AnyElement>,
-    actions: Div,
-    t: &Theme,
-) -> Div {
-    if glass_ui::flat() {
-        return div()
-            .flex()
-            .flex_col()
-            .min_w_0()
-            .child(slot_row(slot, name, detail, None, t))
-            .child(actions.flex_wrap().px(px(16.)).pb(px(12.)));
-    }
-    slot_row(slot, name, detail, Some(actions.into_any_element()), t)
 }
 
 /// A plate that stands apart from the page: notices, the console, the agents note.

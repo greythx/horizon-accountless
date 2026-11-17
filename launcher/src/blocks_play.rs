@@ -114,7 +114,7 @@ impl Launcher {
             .as_ref()
             .map_or_else(|| backend::game_version(&tag), |j| j.minecraft.clone());
         let left = self.download_left();
-        let steps = self.preparing.then(|| self.steps(&version, left));
+        let steps = self.preparing.then(|| self.steps(left));
 
         // No account verdict in this fork: the game is prepared from the player's own Minecraft
         // install, never from Mojang, so there is no download button and no sign-in prompt here.
@@ -225,9 +225,9 @@ impl Launcher {
                         Some(l) => format!("{version} · {} {}", l.kind.name(), l.version),
                         None => version.clone(),
                     };
-                    self.hero("", &game, true, cx)
+                    self.hero("", &game, true)
                 }
-                None => self.hero(&tag, &version, prepared, cx),
+                None => self.hero(&tag, &version, prepared),
             };
             let actions = self.home_actions(prepared || java.is_some(), java.is_some(), cx);
             // The banner: the hero and the Play row over the sky (`sky.rs`), or over the player's
@@ -276,26 +276,19 @@ impl Launcher {
                 .overflow_hidden()
                 .children(picture.into_iter().flatten())
                 .child(
-                    div()
-                        .relative()
-                        .flex()
-                        .items_end()
-                        .gap(px(32.))
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .flex()
-                                .flex_col()
-                                .gap(px(28.))
-                                .child(hero)
-                                .child(actions)
-                                // The preparation's steps right under Play, where the player looks
-                                // after pressing it, not below the fold (arismoko/horizon#666).
-                                .children(steps),
-                        )
-                        // Notes and friends are Horizon's.
-                        .children(java.is_none().then(|| self.home_card(&tag, cx))),
+                    div().relative().flex().items_end().gap(px(32.)).child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(28.))
+                            .child(hero)
+                            .child(actions)
+                            // The preparation's steps right under Play, where the player looks
+                            // after pressing it, not below the fold (arismoko/horizon#666).
+                            .children(steps),
+                    ),
                 )
         };
         let mut page = div().flex().flex_col().gap(px(28.)).child(banner);
@@ -364,14 +357,6 @@ impl Launcher {
                     crate::glass_toast::open(cx, &dir);
                 }),
         );
-        let discord = self.links.discord.clone();
-        if !discord.is_empty() {
-            actions = actions.child(
-                button("crash-discord", "Report on Discord", Kind::Secondary, &t)
-                    .bg(t.plate)
-                    .on_click(move |_, _, cx| cx.open_url(&discord)),
-            );
-        }
         actions = actions.child(
             button("crash-dismiss", "Dismiss", Kind::Ghost, &t).on_click(cx.listener(
                 |this, _: &ClickEvent, _, cx| {

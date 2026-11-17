@@ -19,11 +19,30 @@ pub(super) const SIDE_BY_SIDE: f32 = 1200.;
 /// Under this window width the top bar's tabs tighten and Settings' sections go above the page.
 pub(super) const COMPACT: f32 = 1180.;
 
+const PICKER_ABOVE: f32 = 360.;
+/// What the menu takes besides its rows: its padding, the Manage versions row (55 high) and a
+/// margin under it.
+const PICKER_CHROME: f32 = 12. + 55. + 16.;
+/// The fewest and the most height the Version menu's rows get (two and a half rows; eight).
+const PICKER_ROWS_MIN: f32 = 130.;
+const PICKER_ROWS_MAX: f32 = 440.;
+
+/// How tall the Version menu's rows may be in a window `window_height` high: what is left under
+/// the button, within [`PICKER_ROWS_MIN`] and [`PICKER_ROWS_MAX`]. More rows scroll.
+fn picker_rows_max_height(window_height: f32) -> f32 {
+    (window_height - PICKER_ABOVE - PICKER_CHROME).clamp(PICKER_ROWS_MIN, PICKER_ROWS_MAX)
+}
+
 /// The Version menu's state (Home's picker).
 #[derive(Default)]
 pub(super) struct PickerState {
-    /// The menu is open (the old look's; the glass look keeps versions in instance settings).
+    /// The menu is open.
     pub(super) open: bool,
+    /// Its rows scroll.
+    pub(super) scroll: crate::scrollbar::Scrollbar,
+    /// The window's height when the menu opened: its rows are as tall as the room under the
+    /// button.
+    pub(super) window_height: f32,
 }
 
 /// Which of Home's menus is open.
@@ -239,7 +258,6 @@ impl Launcher {
             FontWeight::SEMIBOLD,
         );
         let version = self.version_chip(cx);
-        let whats_new = self.whats_new_link(cx);
         div()
             .mt(px(16.))
             .flex()
@@ -280,8 +298,7 @@ impl Launcher {
                     .flex_none()
                     .items_center()
                     .gap(px(8.))
-                    .children(version)
-                    .children(whats_new),
+                    .children(version),
             )
     }
 
@@ -301,12 +318,7 @@ impl Launcher {
                         ("when", &last_played(when)),
                     ],
                 ),
-                // Signed out, the button says "Sign in to play": the line says the same.
-                None if self.owner == Some(false)
-                    && !horizon_launcher::developer_offline::selected() =>
-                {
-                    tr("You haven't played this one yet. Sign in to start.").into()
-                }
+                // No accounts in this fork: every install can play once prepared.
                 None => tr("You haven't played this one yet. Press Play to start.").into(),
             },
             (None, None) => String::new(),
@@ -881,21 +893,6 @@ impl Launcher {
             );
         }
         wrap
-    }
-
-    /// "What's new" beside the version button: the Versions page with the played build's notes
-    /// open.
-    fn whats_new_link(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
-        let tag = self.whats_new_tag()?;
-        Some(
-            hero_button("home-whats-new", "sparkles", tr("What's new").into()).on_click(
-                cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    this.whats_new_open = Some(std::iter::once(tag.clone()).collect());
-                    this.go(Page::Versions);
-                    cx.notify();
-                }),
-            ),
-        )
     }
 
     /// What the instance plays, at the title's right: "Latest version", "Nov 11 update",

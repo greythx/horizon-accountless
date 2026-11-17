@@ -2,9 +2,8 @@
 //! (glow, gradients, the hover shine) and motion, then Continue. The rows are Settings' own,
 //! so a choice made here is the same one Settings shows later.
 use super::*;
-use crate::glass_ui::{self as ui, white};
-use crate::plate;
-use horizon_theme::glass::{ink, radius};
+use crate::glass_ui as ui;
+use horizon_theme::glass::ink;
 
 impl Launcher {
     /// Whether the welcome covers the window: a first run, not welcomed before, and the opening
@@ -42,7 +41,7 @@ impl Launcher {
             .child(
                 div()
                     .font_family(horizon_theme::glass::DISPLAY_FONT)
-                    .font_size(px(30.))
+                    .text_size(px(30.))
                     .font_weight(FontWeight::BOLD)
                     .child(tr("How should Horizon look?")),
             )
@@ -58,6 +57,7 @@ impl Launcher {
                 cx.notify();
             }));
         div()
+            .id("welcome-screen")
             .absolute()
             .inset_0()
             .occlude()
@@ -66,7 +66,7 @@ impl Launcher {
             .items_center()
             .justify_center()
             .child(
-                plate(&t.night)
+                crate::plate::plate(&t.night)
                     .id("welcome")
                     .w(px(520.))
                     .max_w(px(560.))
@@ -75,6 +75,7 @@ impl Launcher {
                     .child(head)
                     .child(
                         div()
+                            .id("welcome-body")
                             .max_h(px(380.))
                             .overflow_y_scroll()
                             .px(px(28.))

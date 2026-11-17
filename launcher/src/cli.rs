@@ -947,7 +947,7 @@ pub fn command() -> clap::Command {
 pub const AI_COMMANDS: [&str; 2] = ["mcp", "agent-config"];
 
 /// The keys `settings` sets.
-const SETTING_KEYS: [&str; 14] = [
+const SETTING_KEYS: [&str; 13] = [
     "selected-version",
     "minecraft-dir",
     "server-dir",
@@ -1078,7 +1078,7 @@ pub fn run() -> Option<i32> {
     let command = cli.command?;
     let result = match command {
         Cmd::Mcp | Cmd::AgentConfig { .. } if no_ai => Err(horizon_platform::no_ai::REFUSAL.into()),
-        Cmd::Mcp => crate::mcp::serve(),
+        Cmd::Mcp => crate::mcp::serve().map(|()| 0),
         command => execute(command, cli.json),
     };
     Some(match result {

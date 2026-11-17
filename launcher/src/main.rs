@@ -98,7 +98,7 @@ use gpui::{
     SharedString, Stateful, Subscription, Window, WindowBounds, WindowOptions,
 };
 
-use horizon_launcher::backend::{self, Job, Msg, Release, Running, Settings, Updates};
+use horizon_launcher::backend::{self, Job, Msg, Release, Running, Settings};
 use horizon_launcher::build_import;
 use horizon_launcher::i18n::{self, tr, trf};
 use horizon_launcher::instances;
@@ -242,6 +242,8 @@ struct Launcher {
     bar: (f32, f32),
     releases: Load<Vec<Release>>,
     installed: Vec<String>,
+    /// When the release list was last fetched, for the load-time metric in the perf report.
+    checked: Option<Instant>,
     installing: Option<(String, f32)>,
     /// The versions being deleted on background threads. Each is already out of `installed`, so
     /// nothing can launch, select or prepare it, and its row can't install or remove it again.
@@ -349,8 +351,6 @@ struct Launcher {
     settings: Settings,
     /// The last failed settings write, kept across page changes until a save succeeds.
     settings_save_error: Option<String>,
-    /// The Discord, sponsor and website links: built in until links.json on main has been read.
-    links: backend::Links,
     preparing: bool,
     prepare_log: VecDeque<String>,
     /// Lines received from the game and the preparer since the launcher started: it only grows,

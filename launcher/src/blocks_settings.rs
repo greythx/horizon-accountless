@@ -246,7 +246,6 @@ impl Launcher {
                         this.save_settings();
                         // The release and update lists contain the selected game's assets.
                         this.releases = Load::Loading;
-                        this.updates = backend::Updates::default();
                         this.fetch_startup_releases();
                         cx.notify();
                     });

@@ -376,20 +376,16 @@ impl Launcher {
             &t,
         );
         // No accounts in this fork: Join is never gated behind sign-in; it starts the game or
-        // dims while the server is out of reach.
-        let join = if self.can_join_selected() && !offline {
+        // dims while the game is busy starting or preparing.
+        let join = if self.can_join_selected() {
             join.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 this.quick_play("--server", ip.clone());
                 cx.notify();
             }))
         } else {
-            join.opacity(0.4)
-                .cursor_default()
-                .tooltip(ui::tip(tr(if offline {
-                    "This server doesn't answer right now"
-                } else {
-                    "Wait for the game to finish starting or installing"
-                })))
+            join.opacity(0.4).cursor_default().tooltip(ui::tip(tr(
+                "Wait for the game to finish starting or installing",
+            )))
         };
         let remove = (hovered || confirming).then(|| {
             if confirming {

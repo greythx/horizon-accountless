@@ -703,22 +703,6 @@ impl Launcher {
 }
 
 impl Launcher {
-    /// The tag Home's "What's new" opens: the played build's, else the newest with notes.
-    pub(super) fn whats_new_tag(&self) -> Option<String> {
-        let Load::Ready(list) = &self.releases else {
-            return None;
-        };
-        let has = |r: &&Release| crate::glass_home_tabs::patch_notes(&r.body).is_some();
-        let played = self
-            .selected()
-            .filter(|_| self.selected_instance().is_some_and(|i| i.java.is_none()));
-        list.iter()
-            .filter(has)
-            .find(|r| Some(&r.tag) == played)
-            .or_else(|| list.iter().filter(has).find(|r| r.nightly.is_some()))
-            .map(|r| r.tag.clone())
-    }
-
     /// A card's "What's new" toggle and, opened, its notes by section. None without notes.
     fn glass_whats_new(
         &self,

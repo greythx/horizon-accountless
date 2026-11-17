@@ -552,8 +552,7 @@ impl Launcher {
                     &t,
                 ),
             )
-            .child(self.mods_auto_update_row(cx))
-            .child(self.native_mods_row(cx));
+            .child(self.mods_auto_update_row(cx));
         let ai = section(3)
             .child(self.no_ai_row(n, cx))
             .children(self.agents_section(cx));

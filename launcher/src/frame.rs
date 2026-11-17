@@ -398,6 +398,7 @@ impl Launcher {
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let t = self.theme;
+        let soft = self.look.accent_soft;
         self.load_packs();
         let pinned = self.row_menu.open.is_some();
         let p = self.rail.progress(window, pinned);
@@ -646,6 +647,7 @@ impl Launcher {
         );
 
         crate::glass::plate(radius::PANEL)
+            .id("rail")
             .flex()
             .flex_col()
             .flex_none()
@@ -653,13 +655,13 @@ impl Launcher {
             .my(px(MARGIN))
             .ml(px(MARGIN))
             .overflow_hidden()
-            .child(header.relative())
+            .child(add.relative())
             .child(list.relative())
             .child(foot.relative())
     }
 
     /// The glass top bar: the pages in a glass strip, then Settings (`px-8 pt-3.5`).
-    pub(super) fn glass_topbar(&mut self, cx: &mut Context<Self>) -> Div {
+    pub(super) fn glass_topbar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let compact = self.window_width < crate::glass_home::COMPACT;
         // Near the window's smallest width (960) the page tabs need all the room: the player is
@@ -678,7 +680,7 @@ impl Launcher {
             .gap(px(if compact { 2. } else { 4. }))
             .min_w_0();
         for (page, label, _) in Page::in_top_bar() {
-            let mut item = ui::tab(format!("nav-{label}"), tr(label), self.page == page, &t);
+            let mut item = ui::nav_tab(format!("nav-{label}"), tr(label), self.page == page, &t);
             if compact {
                 item = item.px(px(8.));
             }

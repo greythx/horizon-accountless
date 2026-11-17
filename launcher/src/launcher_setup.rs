@@ -1,5 +1,5 @@
-//! The launcher's state set up (`Launcher::new`), its settings saved, page changes, the
-//! launcher's own updates and the release list.
+//! The launcher's state set up (`Launcher::new`), its settings saved, page changes and the
+//! release list.
 use super::*;
 
 impl Launcher {
@@ -19,30 +19,6 @@ impl Launcher {
                 .update(cx, |this, cx| this.drain(window_handle, cx))
                 .is_err()
             {
-                break;
-            }
-        })
-        .detach();
-        // Counts the time a partner banner is on screen, until it may be hidden.
-        cx.spawn(async move |this, cx| loop {
-            cx.background_executor()
-                .timer(Duration::from_secs(10))
-                .await;
-            let counting = this.update(cx, |this, cx| {
-                let s = &mut this.settings;
-                if s.partner_hidden || s.partner_seen_secs >= partner::SEEN_BEFORE_HIDE {
-                    return false;
-                }
-                // On screen on every page: the card in the sidebar, the banner on Servers.
-                s.partner_seen_secs += 10;
-                if s.partner_seen_secs % 60 == 0 || s.partner_seen_secs >= partner::SEEN_BEFORE_HIDE
-                {
-                    this.save_settings();
-                    cx.notify();
-                }
-                true
-            });
-            if !matches!(counting, Ok(true)) {
                 break;
             }
         })
@@ -108,7 +84,6 @@ impl Launcher {
                     focus,
                 }
             }),
-            updates: Updates::default(),
             checked: None,
             instance_install: None,
             install_next: None,
@@ -301,14 +276,6 @@ impl Launcher {
             this.sheet_tab = glass_sheet::SheetTab::from_env().unwrap_or_default();
             this.open_instance_dialog(this.selected_instance().cloned());
         }
-        if cfg!(debug_assertions)
-            && matches!(
-                std::env::var("HORIZON_LAUNCHER_PAGE").as_deref(),
-                Ok("wardrobe" | "shop")
-            )
-        {
-            this.wardrobe_preview();
-        }
         // What the game and the launcher kept, if the player allows it and there is a server.
         this.mod_preview_from_env();
         this
@@ -420,6 +387,7 @@ impl Launcher {
     pub(crate) fn fetch_releases(&mut self) {
         self.releases = Load::Loading;
         self.notes.clear();
+        self.checked = Some(Instant::now());
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let _ = tx.send(Msg::Releases(backend::releases()));
@@ -427,6 +395,7 @@ impl Launcher {
     }
 
     pub(crate) fn fetch_startup_releases(&mut self) {
+        self.checked = Some(Instant::now());
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let _ = tx.send(Msg::Releases(backend::releases()));

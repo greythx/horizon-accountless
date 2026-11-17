@@ -602,7 +602,7 @@ pub(super) fn stable_builds(releases: &[Release]) -> Vec<StableBuild> {
             r.nightly.is_none()
                 && r.asset.is_some()
                 && !r.prerelease
-                && horizon_launcher::backend::launcher_version(&r.tag).is_none()
+                && horizon_launcher::backend::is_game_tag(&r.tag)
         })
         .map(|r| StableBuild {
             tag: r.tag.clone(),
