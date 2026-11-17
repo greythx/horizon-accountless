@@ -32,7 +32,12 @@ CONFIG_PATH = "tools/layers.json"
 TOOL = "tool"
 DOC = "docs/layers.md"
 # The section of docs/layers.md that says what a layer may depend on.
-SECTION = {"engine": "#engine", "platform": "#platform", "horizon": "#horizon", TOOL: "#tools"}
+SECTION = {
+    "engine": "#engine",
+    "platform": "#platform",
+    "horizon": "#horizon",
+    TOOL: "#tools",
+}
 WHERE = "#where-a-new-feature-goes"
 
 
@@ -44,19 +49,37 @@ def load_config(path=CONFIG):
 def base_config(base):
     """tools/layers.json where the branch left `base` (their merge base), or None when there is none. On `base` itself,
     the exceptions main dropped since then would look like ones this branch added."""
-    merge_base = subprocess.run(["git", "merge-base", base, "HEAD"], capture_output=True, text=True, cwd=ROOT)
+    merge_base = subprocess.run(
+        ["git", "merge-base", base, "HEAD"], capture_output=True, text=True, cwd=ROOT
+    )
     if merge_base.returncode != 0:
         return None
-    shown = subprocess.run(["git", "show", f"{merge_base.stdout.strip()}:{CONFIG_PATH}"], capture_output=True,
-                           text=True, cwd=ROOT)
+    shown = subprocess.run(
+        ["git", "show", f"{merge_base.stdout.strip()}:{CONFIG_PATH}"],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+    )
     return json.loads(shown.stdout) if shown.returncode == 0 else None
 
 
 def metadata(manifest):
     """`cargo metadata` for one workspace, without resolving dependencies (no network, no lockfile)."""
     out = subprocess.run(
-        ["cargo", "metadata", "--no-deps", "--offline", "--format-version", "1", "--manifest-path", str(manifest)],
-        check=True, capture_output=True, text=True, cwd=ROOT,
+        [
+            "cargo",
+            "metadata",
+            "--no-deps",
+            "--offline",
+            "--format-version",
+            "1",
+            "--manifest-path",
+            str(manifest),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
     ).stdout
     return json.loads(out)["packages"]
 
@@ -98,7 +121,11 @@ def crossings(config, graph):
     out = []
     for crate in sorted(graph):
         for dep in sorted(graph[crate]):
-            if layers.get(crate) in may and layers.get(dep) in may and layers[dep] not in may[layers[crate]]:
+            if (
+                layers.get(crate) in may
+                and layers.get(dep) in may
+                and layers[dep] not in may[layers[crate]]
+            ):
                 out.append(f"{crate} -> {dep}")
     return out
 
@@ -113,7 +140,9 @@ def check(config, graph, base=None, optional=frozenset(), upstream=None):
     for crate in sorted(graph):
         layer = layers.get(crate)
         if layer is None:
-            problems.append(f"{crate}: no layer. Give it one in {CONFIG_PATH} ({DOC}{WHERE} says which)")
+            problems.append(
+                f"{crate}: no layer. Give it one in {CONFIG_PATH} ({DOC}{WHERE} says which)"
+            )
         elif layer != TOOL and layer not in may:
             problems.append(f"{crate}: unknown layer {layer!r} in {CONFIG_PATH}")
     for crate in sorted(graph):
@@ -123,42 +152,67 @@ def check(config, graph, base=None, optional=frozenset(), upstream=None):
         for dep in sorted(graph[crate]):
             # A path dependency with no layer is a vendored crate (third_party/) or a fixture.
             if layers.get(dep) == TOOL:
-                problems.append(f"{crate} ({layer}) -> {dep} (tool): shipped code may not depend on a dev tool "
-                                f"({DOC}{SECTION[TOOL]})")
+                problems.append(
+                    f"{crate} ({layer}) -> {dep} (tool): shipped code may not depend on a dev tool "
+                    f"({DOC}{SECTION[TOOL]})"
+                )
     found = set(crossings(config, graph))
     for edge in sorted(found - allowed):
         crate, dep = edge.split(" -> ")
         if edge in recorded_optional:
             if edge not in optional:
-                problems.append(f"{edge}: listed in 'optional' in {CONFIG_PATH}, but the dependency is no longer "
-                                f"optional. Keep it behind its feature, or move the code to the right layer "
-                                f"({DOC}{SECTION[layers[crate]]})")
+                problems.append(
+                    f"{edge}: listed in 'optional' in {CONFIG_PATH}, but the dependency is no longer "
+                    f"optional. Keep it behind its feature, or move the code to the right layer "
+                    f"({DOC}{SECTION[layers[crate]]})"
+                )
             continue
-        problems.append(f"{edge}: {layers[crate]} may not depend on {layers[dep]}. "
-                        f"See {DOC}{SECTION[layers[crate]]}: move the code to the right layer, or offer an "
-                        f"extension point the other side plugs into")
+        problems.append(
+            f"{edge}: {layers[crate]} may not depend on {layers[dep]}. "
+            f"See {DOC}{SECTION[layers[crate]]}: move the code to the right layer, or offer an "
+            f"extension point the other side plugs into"
+        )
     if base is not None:
         base_layers = base.get("crates", {})
         if upstream is not None:
             for crate, layer in sorted(layers.items()):
-                if crate not in base_layers and upstream.get("crates", {}).get(crate) != layer:
-                    problems.append(f"{crate}: new layer assignment is not listed verbatim in verified upstream")
+                if (
+                    crate not in base_layers
+                    and upstream.get("crates", {}).get(crate) != layer
+                ):
+                    problems.append(
+                        f"{crate}: new layer assignment is not listed verbatim in verified upstream"
+                    )
         # An exception may move between the lists (an `allowed` edge put behind a feature), but not appear.
         base_exceptions = set(base.get("allowed", [])) | optional_rows(base)
+        sync_optional = optional_rows(upstream) if upstream is not None else set()
+        sync_allowed = (
+            set(upstream.get("allowed", [])) if upstream is not None else set()
+        )
         for key, entries in (("allowed", allowed), ("optional", recorded_optional)):
             for edge in sorted(entries - base_exceptions):
                 crate, dep = edge.split(" -> ")
                 # A crate new since the base (split out of another, or renamed) may carry its old crate's
                 # exceptions; a new dependency target excuses nothing.
-                restored = (key == "allowed" and upstream is not None
-                            and edge in upstream.get("allowed", []))
+                # A verified sync may restore exact rows its commit carries (an `optional` row upstream
+                # added between the fork point and this sync): those are not *new* exceptions.
+                restored = (
+                    key == "allowed" and upstream is not None and edge in sync_allowed
+                )
+                restored = restored or (key == "optional" and edge in sync_optional)
                 if not restored and (crate in base_layers or upstream is not None):
-                    problems.append(f"{edge}: added to '{key}' in {CONFIG_PATH}. The exceptions only shrink; "
-                                    f"see {DOC}{SECTION.get(layers.get(crate), '')}")
-    notes = [f"{edge}: no longer a dependency; you can remove it from 'allowed' in {CONFIG_PATH}"
-             for edge in sorted(allowed - found)]
-    notes += [f"{edge}: no longer a dependency; you can remove it from 'optional' in {CONFIG_PATH}"
-              for edge in sorted(recorded_optional - found - allowed)]
+                    problems.append(
+                        f"{edge}: added to '{key}' in {CONFIG_PATH}. The exceptions only shrink; "
+                        f"see {DOC}{SECTION.get(layers.get(crate), '')}"
+                    )
+    notes = [
+        f"{edge}: no longer a dependency; you can remove it from 'allowed' in {CONFIG_PATH}"
+        for edge in sorted(allowed - found)
+    ]
+    notes += [
+        f"{edge}: no longer a dependency; you can remove it from 'optional' in {CONFIG_PATH}"
+        for edge in sorted(recorded_optional - found - allowed)
+    ]
     return problems, notes
 
 
@@ -168,8 +222,11 @@ def portable(config, packages):
     spec = config.get("portable", {})
     crates, forbidden = set(spec.get("crates", [])), set(spec.get("forbidden", []))
     optional_baselines = optional_rows(config)
-    problems = {f"{crate}: listed as portable in {CONFIG_PATH}, but not an engine crate there"
-                for crate in crates if config["crates"].get(crate) != "engine"}
+    problems = {
+        f"{crate}: listed as portable in {CONFIG_PATH}, but not an engine crate there"
+        for crate in crates
+        if config["crates"].get(crate) != "engine"
+    }
     for package in packages:
         if package["name"] not in crates:
             continue
@@ -180,30 +237,52 @@ def portable(config, packages):
             if dep.get("optional") and edge in optional_baselines:
                 continue
             if dep.get("path") and dep["name"] not in crates:
-                problems.add(f"{edge}: a portable crate depends only on the other portable crates "
-                             f"({DOC}{SECTION['engine']})")
+                problems.add(
+                    f"{edge}: a portable crate depends only on the other portable crates "
+                    f"({DOC}{SECTION['engine']})"
+                )
             elif not dep.get("path") and dep["name"] in forbidden:
-                problems.add(f"{edge}: a portable crate takes no window, GPU, sound, gamepad, clipboard or HTTP "
-                             f"library ({DOC}{SECTION['engine']})")
+                problems.add(
+                    f"{edge}: a portable crate takes no window, GPU, sound, gamepad, clipboard or HTTP "
+                    f"library ({DOC}{SECTION['engine']})"
+                )
     return sorted(problems)
 
 
 def workspace_packages(config):
-    return [package for manifest in config["workspaces"] for package in metadata(ROOT / manifest)]
+    return [
+        package
+        for manifest in config["workspaces"]
+        for package in metadata(ROOT / manifest)
+    ]
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--base", help="refuse 'allowed' entries added since this git ref")
-    parser.add_argument("--list", action="store_true", help="print each crate's layer and the exceptions")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--base", help="refuse 'allowed' entries added since this git ref"
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="print each crate's layer and the exceptions",
+    )
     if __package__:
         from . import merge_base
     else:
         import merge_base
-    parser.add_argument("--pull-request-merge", action="store_true", help=merge_base.PULL_REQUEST_MERGE_HELP)
+    parser.add_argument(
+        "--pull-request-merge",
+        action="store_true",
+        help=merge_base.PULL_REQUEST_MERGE_HELP,
+    )
     args = parser.parse_args(argv)
     if args.base:
-        args.base, error = merge_base.pull_request_base(args.base, args.pull_request_merge)
+        args.base, error = merge_base.pull_request_base(
+            args.base, args.pull_request_merge
+        )
         if error:
             print(f"Layer check failed: {error}")
             return 1
@@ -236,8 +315,10 @@ def main(argv=None):
         for problem in problems:
             print(f"  {problem}")
         return 1
-    print(f"Layer check passed: {len(graph)} crates, {len(config.get('allowed', []))} exceptions left "
-          f"to move ({DOC}).")
+    print(
+        f"Layer check passed: {len(graph)} crates, {len(config.get('allowed', []))} exceptions left "
+        f"to move ({DOC})."
+    )
     return 0
 
 
