@@ -660,13 +660,6 @@ pub(super) fn horizon_choices(releases: &[Release], installed: &[String]) -> Vec
     out
 }
 
-/// "Nightly · c9d474d", "Imported · 2026-10-30", or the tag.
-fn version_label(tag: &str) -> String {
-    horizon_launcher::backend::nightly_label(tag)
-        .or_else(|| build_import::label(tag))
-        .unwrap_or_else(|| tag.to_string())
-}
-
 impl Launcher {
     /// The mockup's three ways to a new instance, over the form: make one here (this dialog),
     /// install a modpack (the Mods page's Modpacks) or import one (a file, or another

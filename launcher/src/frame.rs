@@ -45,8 +45,6 @@ const RAIL_MOTION: horizon_theme::Motion = horizon_theme::Motion {
     curve: [0.22, 0.9, 0.3, 1.08],
 };
 /// Discord's own blurple, in every theme, and under the pointer.
-const DISCORD: u32 = 0x5865F2;
-const DISCORD_HOVER: u32 = 0x4752C4;
 
 /// The rail's state: whether the pointer is on it, and where its last opening or shutting began.
 #[derive(Default)]
@@ -58,8 +56,6 @@ pub struct Rail {
     at: f32,
     /// The instance list's scroll, for the cue that more rows sit below.
     list: gpui::ScrollHandle,
-    /// The web links shown in full while the instance list overflows (they fold into one row).
-    links_open: bool,
 }
 
 impl Rail {
@@ -407,44 +403,6 @@ impl Launcher {
         let label = ((p - 0.35) / 0.65).clamp(0., 1.);
         let fade = move |d: Div| d.min_w_0().overflow_hidden().opacity(label);
 
-        // A rail button: an icon, its name beside it once the rail opens.
-        let button = |id: SharedString, icon: &'static str, name: SharedString, active: bool| {
-            keyboard(
-                track_hover(
-                    div()
-                        .id(id.clone())
-                        .relative()
-                        .flex()
-                        .flex_none()
-                        .items_center()
-                        .gap(px(12.))
-                        .w_full()
-                        .h(px(42.))
-                        .px(px(17.5))
-                        .rounded(px(radius::ROW))
-                        .border_1()
-                        .border_color(if active {
-                            white(ui::edge::STRONG)
-                        } else {
-                            gpui::transparent_black()
-                        })
-                        .when(active, |d| d.bg(white(fill::ACTIVE)))
-                        .cursor_pointer()
-                        .child(ui::hover_edge(&id, radius::ROW, fill::ROW_HOVER, true))
-                        .child(ui::icon(icon, 19., white(ink::SOFT)).relative())
-                        .child(
-                            fade(ui::text(14., FontWeight::MEDIUM, ink::STRONG).relative())
-                                .whitespace_nowrap()
-                                .child(name.clone()),
-                        )
-                        // Narrow, the rail shows icons alone: the name on hover.
-                        .when(!open, |d| d.tooltip(ui::tip(name))),
-                    id,
-                ),
-                &t,
-            )
-        };
-
         // Add instance: the accent's outline, not the sun gradient, so Play stays the one bright
         // button on Home.
         let add = keyboard(
@@ -621,16 +579,6 @@ impl Launcher {
                 d.child(div().flex().flex_none().justify_center().child(more))
             });
 
-        // A hairline set in from the rail's sides: between the instances and the buttons, and
-        // between Settings and the version.
-        let rule = || {
-            div()
-                .flex_none()
-                .h(px(1.))
-                .mx(px(10.))
-                .my(px(4.))
-                .bg(white(0.1))
-        };
         let mut foot = div()
             .flex()
             .flex_col()
@@ -664,9 +612,6 @@ impl Launcher {
     pub(super) fn glass_topbar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let compact = self.window_width < crate::glass_home::COMPACT;
-        // Near the window's smallest width (960) the page tabs need all the room: the player is
-        // only a face and Sign in only its logo, each with a tooltip.
-        let tight = self.window_width < 1000.;
         let mark = div()
             .flex()
             .flex_none()

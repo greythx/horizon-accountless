@@ -127,34 +127,6 @@ fn section(i: usize) -> Div {
     )
 }
 
-/// A tile (the mockup's `AboutTile`, `rounded-[14px] bg-white/[0.045] p-5`): its lead, name, a
-/// line under it and what it does.
-fn tile(lead: AnyElement, title: String, note: String, action: AnyElement) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .flex_1()
-        .min_w(px(140.))
-        .rounded(px(radius::LARGE))
-        .bg(white(0.045))
-        .border_1()
-        .border_color(white(ui::edge::REST))
-        .p(px(20.))
-        .child(div().child(lead))
-        .child(
-            ui::text(15., FontWeight::SEMIBOLD, ink::FULL)
-                .mt(px(16.))
-                .child(title),
-        )
-        .child(
-            ui::text(13., FontWeight::NORMAL, 0.6)
-                .mt(px(2.))
-                .truncate()
-                .child(note),
-        )
-        .child(div().mt(px(16.)).flex().items_start().child(action))
-}
-
 /// The scroll spy: which section is being read, given each section's top from the pane's top
 /// (`tops`, in order), the pane's `height`, how far it is `scrolled` and how far it can be (`max`).
 /// The last section whose top passed a reading line, which sits at 30 % of the pane (the mockup's)

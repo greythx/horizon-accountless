@@ -108,7 +108,7 @@ use horizon_launcher::storage;
 use native_consent::PendingConsent;
 use scrollbar::Scrollbar;
 use std::borrow::Cow;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;

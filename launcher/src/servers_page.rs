@@ -83,36 +83,7 @@ pub(super) enum Field {
     WindowHeight,
 }
 
-impl Field {
-    const ALL: [Field; 26] = [
-        Field::Name,
-        Field::Seed,
-        Field::Players,
-        Field::Command,
-        Field::AddPlayer,
-        Field::Motd,
-        Field::Port,
-        Field::Token,
-        Field::Email,
-        Field::InstanceName,
-        Field::InstanceGroup,
-        Field::InstanceVersion,
-        Field::InstanceModsFilter,
-        Field::ServerName,
-        Field::ServerAddress,
-        Field::ConsoleSearch,
-        Field::PreLaunch,
-        Field::Wrapper,
-        Field::LaunchEnv,
-        Field::PostExit,
-        Field::MemoryLimit,
-        Field::DeleteServer,
-        Field::AccentHex,
-        Field::JavaArgs,
-        Field::WindowWidth,
-        Field::WindowHeight,
-    ];
-}
+impl Field {}
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum Tab {

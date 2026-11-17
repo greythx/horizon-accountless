@@ -581,15 +581,6 @@ pub(crate) fn page_header(title: &str, description: &str, t: &Theme) -> Div {
 /// One row of a list, as its own panel: a name in the pixel face with an optional detail under
 /// it, then a value or a control on the right. Rows were numbered in the quiet look; `_n` keeps
 /// the call sites as they are.
-/// How an available update is named: a Nightly by its title ("Nightly 2026-10-28 · 0c02067"), a
-/// release by its tag.
-pub(crate) fn update_name(release: &Release) -> &str {
-    match release.nightly {
-        Some(_) => &release.name,
-        None => &release.tag,
-    }
-}
-
 pub(crate) fn index_row(
     _n: usize,
     name: impl IntoElement,
