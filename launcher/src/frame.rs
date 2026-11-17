@@ -44,7 +44,6 @@ const RAIL_MOTION: horizon_theme::Motion = horizon_theme::Motion {
     ms: 320,
     curve: [0.22, 0.9, 0.3, 1.08],
 };
-/// Discord's own blurple, in every theme, and under the pointer.
 
 /// The rail's state: whether the pointer is on it, and where its last opening or shutting began.
 #[derive(Default)]
