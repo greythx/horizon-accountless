@@ -1066,7 +1066,6 @@ fn asset_installed<'a>(
     }
 }
 
-
 /// Downloads `release`'s archive for this platform, checks it against `sha256` (its signed
 /// checksum), and unpacks it as the installed version `tag`.
 mod installation;
@@ -2558,7 +2557,8 @@ pub(crate) fn client_program(tag: &str) -> PathBuf {
 pub fn server_command(tag: &str, folder: &Path) -> Command {
     let mut cmd = Command::new(version_dir(tag).join(CLIENT));
     // This fork never phones home: the game must not send the heartbeat ping or telemetry.
-    cmd.env("HORIZON_NO_HEARTBEAT", "1").env("HORIZON_TELEMETRY_URL", "off");
+    cmd.env("HORIZON_NO_HEARTBEAT", "1")
+        .env("HORIZON_TELEMETRY_URL", "off");
     crate::run_leases::mark(&mut cmd, &version_dir(tag));
     cmd.current_dir(folder)
         .arg("--resources")

@@ -132,7 +132,6 @@ impl Launcher {
                 ),
             )
     }
-
 }
 
 /// A release's changes: each section's name and its lines.

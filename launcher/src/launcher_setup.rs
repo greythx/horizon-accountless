@@ -395,7 +395,6 @@ impl Launcher {
         self.picker.open = false;
         self.language_menu = false;
         self.mods.browse.sort_menu = false;
-        self.account_menu = false;
     }
 
     // The Horizon version being installed as an update: removed in this fork (no self-update).

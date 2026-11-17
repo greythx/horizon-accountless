@@ -50,7 +50,12 @@ const INDEX: [&[&str]; 5] = [
         "Applications menu",
     ],
     &["Proxy"],
-    &["Game architecture", "Arguments", "Update mods automatically", "Memory"],
+    &[
+        "Game architecture",
+        "Arguments",
+        "Update mods automatically",
+        "Memory",
+    ],
     &["No AI", "Agents", "MCP"],
     &[
         "UI made by Xmilon",
@@ -549,7 +554,9 @@ impl Launcher {
             )
             .child(self.mods_auto_update_row(cx))
             .child(self.native_mods_row(cx));
-        let ai = section(3).child(self.no_ai_row(n, cx)).children(self.agents_section(cx));
+        let ai = section(3)
+            .child(self.no_ai_row(n, cx))
+            .children(self.agents_section(cx));
         let mono = |s: String| {
             div()
                 .font_family(theme::MONO)

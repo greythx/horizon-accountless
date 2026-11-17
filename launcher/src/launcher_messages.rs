@@ -97,10 +97,9 @@ impl Launcher {
                                 .filter(|t| **t != tag)
                                 .cloned()
                                 .collect();
-                            let select =
-                                !for_instance || self.launcher_version().is_none();
-                            let select =
-                                select && backend::select_after_update(
+                            let select = !for_instance || self.launcher_version().is_none();
+                            let select = select
+                                && backend::select_after_update(
                                     self.settings.selected.as_deref(),
                                     &before,
                                 );

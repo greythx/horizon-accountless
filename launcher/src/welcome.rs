@@ -46,10 +46,9 @@ impl Launcher {
                     .font_weight(FontWeight::BOLD)
                     .child(tr("How should Horizon look?")),
             )
-            .child(
-                ui::text(15., FontWeight::NORMAL, ink::QUIET)
-                    .child(tr("Everything you pick here can be changed later in Settings.")),
-            );
+            .child(ui::text(15., FontWeight::NORMAL, ink::QUIET).child(tr(
+                "Everything you pick here can be changed later in Settings.",
+            )));
         let cont = ui::quiet("welcome-continue", tr("Continue"), 44., &t)
             .justify_center()
             .w(px(320.))
@@ -74,7 +73,14 @@ impl Launcher {
                     .flex()
                     .flex_col()
                     .child(head)
-                    .child(div().max_h(px(380.)).overflow_y_scroll().px(px(28.)).pb(px(12.)).children(rows))
+                    .child(
+                        div()
+                            .max_h(px(380.))
+                            .overflow_y_scroll()
+                            .px(px(28.))
+                            .pb(px(12.))
+                            .children(rows),
+                    )
                     .child(div().flex().justify_center().pb(px(26.)).child(cont)),
             )
     }

@@ -83,7 +83,6 @@ mod shell;
 mod shortcut_page;
 mod specimen;
 mod sticky;
-mod switch_page;
 mod theme;
 mod themes_page;
 mod titlebar;
@@ -159,7 +158,9 @@ impl Page {
 
     /// The pages the top bar shows: all but Settings.
     fn in_top_bar() -> impl Iterator<Item = (Page, &'static str, &'static str)> {
-        Self::ALL.into_iter().filter(|(page, ..)| *page != Page::Settings)
+        Self::ALL
+            .into_iter()
+            .filter(|(page, ..)| *page != Page::Settings)
     }
 }
 
@@ -325,7 +326,6 @@ struct Launcher {
     hue_dragging: bool,
     /// Settings > Language's dropdown (`language_page.rs`).
     language_menu: bool,
-    /// The top bar's quick switch of who plays (`switch_page.rs`).
 
     /// The glass sidebar's ⋮ menu (`frame.rs`).
     row_menu: frame::RowMenu,

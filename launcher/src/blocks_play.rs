@@ -144,7 +144,9 @@ impl Launcher {
         let minecraft = self.settings.minecraft_dir.as_deref().map_or_else(
             || {
                 div()
-                        .child(tr("Not found. Choose the folder where your launcher keeps Minecraft."))
+                    .child(tr(
+                        "Not found. Choose the folder where your launcher keeps Minecraft.",
+                    ))
                     .into_any_element()
             },
             |p| {

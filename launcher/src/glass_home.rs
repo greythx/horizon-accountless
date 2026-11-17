@@ -90,21 +90,16 @@ impl Launcher {
                 .children(settings(self, cx))
                 .child(div().flex_1().min_w(px(22.)))
         } else {
-            div()
-                .mt(px(32.))
-                .flex()
-                .flex_col()
-                .gap(px(12.))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(10.))
-                        .child(self.play_group(tag, prepared || java.is_some(), cx))
-                        .children(java.is_none().then(|| self.glass_picker(cx)))
-                        .children(self.folder_group(java.is_none(), cx))
-                        .children(settings(self, cx)),
-                )
+            div().mt(px(32.)).flex().flex_col().gap(px(12.)).child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(self.play_group(tag, prepared || java.is_some(), cx))
+                    .children(java.is_none().then(|| self.glass_picker(cx)))
+                    .children(self.folder_group(java.is_none(), cx))
+                    .children(settings(self, cx)),
+            )
         };
         div()
             .flex()
@@ -371,37 +366,38 @@ impl Launcher {
                         native_status::State::NotBuilt | native_status::State::Outdated
                     )
                 });
-        let busy: Option<(SharedString, Option<f32>)> = match (self.preparing, &self.starting_client) {
-            (_, _) if own.is_some() => Some((tr("Installing").into(), own.flatten())),
-            (true, _) => Some((
-                tr("Preparing").into(),
-                horizon_launcher::mojang::progress().map(|(d, n)| d as f32 / n.max(1) as f32),
-            )),
-            (_, Some(_)) => Some((tr("Starting").into(), None)),
-            // This instance's mods building (Build and play): the build's overall progress,
-            // the same figure as its card.
-            _ if building => Some((
-                tr("Building mods").into(),
-                self.native_progress
-                    .map(|p| build_mode::percent(Some(p)) as f32 / 100.),
-            )),
-            // One build at a time: another instance's build first, and this one says whose.
-            _ if needs_build && self.native_step.is_some() => Some((
-                trf(
-                    "Waiting for {instance}",
-                    &[(
-                        "instance",
-                        self.native_for
-                            .as_deref()
-                            .and_then(|id| self.instances.list.iter().find(|i| i.id == id))
-                            .map_or("", |i| i.name.as_str()),
-                    )],
-                )
-                .into(),
-                None,
-            )),
-            _ => None,
-        };
+        let busy: Option<(SharedString, Option<f32>)> =
+            match (self.preparing, &self.starting_client) {
+                (_, _) if own.is_some() => Some((tr("Installing").into(), own.flatten())),
+                (true, _) => Some((
+                    tr("Preparing").into(),
+                    horizon_launcher::mojang::progress().map(|(d, n)| d as f32 / n.max(1) as f32),
+                )),
+                (_, Some(_)) => Some((tr("Starting").into(), None)),
+                // This instance's mods building (Build and play): the build's overall progress,
+                // the same figure as its card.
+                _ if building => Some((
+                    tr("Building mods").into(),
+                    self.native_progress
+                        .map(|p| build_mode::percent(Some(p)) as f32 / 100.),
+                )),
+                // One build at a time: another instance's build first, and this one says whose.
+                _ if needs_build && self.native_step.is_some() => Some((
+                    trf(
+                        "Waiting for {instance}",
+                        &[(
+                            "instance",
+                            self.native_for
+                                .as_deref()
+                                .and_then(|id| self.instances.list.iter().find(|i| i.id == id))
+                                .map_or("", |i| i.name.as_str()),
+                        )],
+                    )
+                    .into(),
+                    None,
+                )),
+                _ => None,
+            };
         let open = self.home_menu == HomeMenu::Play;
         // What is drawn on the accent takes its own ink (white on the default violet), in the
         // light look too, where `white` is the page's dark ink; Stop sits on a quiet fill.
@@ -1073,7 +1069,6 @@ impl Launcher {
         }
         Some(wrap)
     }
-
 }
 
 /// The instance of one edition (`java`) an edition tab goes to: of those the player can select,
