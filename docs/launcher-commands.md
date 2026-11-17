@@ -171,11 +171,11 @@ MCP: `notes`.
 
 ## `horizon-launcher settings`
 
-Show the launcher's settings, or set one (the Settings page): selected-version TAG, game-architecture auto|x64|arm64, minecraft-dir PATH, server-dir PATH ("default" resets a folder), prune-old-versions on|off (delete old versions after an install, keeping the selected one, the ones instances use and the newest few), keep-versions N (how many of the newest to keep; "default" is 2), opening-animation on|off, proxy http://host:port|socks5://host:port ("default" removes it), while-playing stay|minimize|hide (what the window does while the game runs), language system|en|fr|ru|de|zh|es|uk|pl (the window's language; system follows the computer's), accent violet|blue|teal|green|amber|red|pink|#rrggbb|DEGREES (a named accent, any colour, or any hue), background PATH (a picture behind Home; "default" shows Horizon's landscape), native-cache-gib N (combined native compilation cache limit in GiB, default 30; 0 disables automatic cleanup), native-profile performance|dev|release (the profile native mods build with: performance is incremental, dev rebuilds a mod quickest for a slow game, release is slowest to build and slightly faster to play), cache-limit-gib N (managed cache limit in GiB: 10, 25 (default), 50, 100; 0 disables automatic cleanup).
+Show the launcher's settings, or set one (the Settings page): selected-version TAG, game-architecture auto|x64|arm64, minecraft-dir PATH, server-dir PATH ("default" resets a folder), prune-old-versions on|off (delete old versions after an install, keeping the selected one, the ones instances use and the newest few), keep-versions N (how many of the newest to keep; "default" is 2), opening-animation on|off, proxy http://host:port|socks5://host:port ("default" removes it), while-playing stay|minimize|hide (what the window does while the game runs), language system|en|fr|ru|de|zh|es|uk|pl (the window's language; system follows the computer's), accent violet|blue|teal|green|amber|red|pink|#rrggbb|DEGREES (a named accent, any colour, or any hue), background PATH (a picture behind Home; "default" shows Horizon's landscape), cache-limit-gib N (managed cache limit in GiB: 10, 25 (default), 50, 100; 0 disables automatic cleanup).
 
     horizon-launcher settings [KEY] [VALUE]
 
-- `KEY` (selected-version, minecraft-dir, server-dir, prune-old-versions, keep-versions, opening-animation, game-architecture, proxy, while-playing, language, accent, background, native-profile, native-cache-gib, cache-limit-gib)
+- `KEY` (selected-version, minecraft-dir, server-dir, prune-old-versions, keep-versions, opening-animation, game-architecture, proxy, while-playing, language, accent, background, cache-limit-gib)
 - `VALUE`: The new value (with KEY)
 
 MCP: `settings`.
