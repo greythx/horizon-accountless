@@ -153,20 +153,23 @@ impl Launcher {
         let Some(tag) = self.selected().cloned() else {
             return;
         };
-        // The disclaimer, once: Horizon may download the game from Mojang's servers, for a
-        // player who owns it.
-        if self.settings.mojang_downloads_allowed_at.is_none()
-            && !backend::prepare_files_present(&backend::game_version(&tag))
-        {
-            self.mojang_consent = Some(MojangConsentRequest::Prepare);
-            return;
-        }
-        horizon_launcher::mojang::CANCEL.store(false, Ordering::Relaxed);
+        // The chosen folder, in memory, not on disk: what the worker will look in, so the
+        // preflight asks about the same folder even if writing settings failed.
         let minecraft = self
             .settings
             .minecraft_dir
             .clone()
             .unwrap_or_else(|| horizon_platform::prepare::artifacts::minecraft_dir(None));
+        // The disclaimer, once: Horizon may download the game from Mojang's servers, for a
+        // player who owns it. A preparation that reuses this version's imports needs nothing.
+        if self.settings.mojang_downloads_allowed_at.is_none()
+            && !backend::prepare_files_present(&backend::game_version(&tag), &minecraft)
+            && !backend::reused_imports(&tag)
+        {
+            self.mojang_consent = Some(MojangConsentRequest::Prepare);
+            return;
+        }
+        horizon_launcher::mojang::CANCEL.store(false, Ordering::Relaxed);
         self.prepare_log.clear();
         self.prepare_error = None;
         self.prepare_log
@@ -221,7 +224,7 @@ impl Launcher {
                 .take()
                 .filter(|(flag, _)| *flag == "--server")
                 .map(|(_, ip)| ip);
-            if self.client.is_some() || self.starting_client.is_some() {
+            if self.client.is_some() || self.starting_client.is_some() || self.preparing {
                 return;
             }
             // The disclaimer, once: the launcher may download this version from Mojang's
@@ -293,7 +296,9 @@ impl Launcher {
     /// would (no game running or starting).
     pub(crate) fn can_join_selected(&self) -> bool {
         match self.selected_instance() {
-            Some(i) if i.java.is_some() => self.client.is_none() && self.starting_client.is_none(),
+            Some(i) if i.java.is_some() => {
+                self.client.is_none() && self.starting_client.is_none() && !self.preparing
+            }
             _ => self.can_start_selected(),
         }
     }

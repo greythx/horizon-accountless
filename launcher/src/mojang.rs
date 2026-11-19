@@ -33,7 +33,7 @@ pub fn progress() -> Option<(usize, usize)> {
     (total > 0).then(|| (DONE.load(Relaxed).min(total), total))
 }
 
-const CANCELLED: &str = "Download cancelled. Download again to go on where it stopped.";
+pub const CANCELLED: &str = "Download cancelled. Download again to go on where it stopped.";
 
 /// One file to download, with the size Mojang lists for it when it lists one.
 struct File {
@@ -358,14 +358,20 @@ fn objects(index: &Value, dir: &Path) -> Result<Vec<File>, String> {
 fn fetch_file(fetch: Fetch, file: &File) -> Result<Vec<u8>, String> {
     let body = fetch(&file.url)?;
     if let Some(size) = file.size.filter(|&size| size != body.len() as u64) {
-        return Err(format!(
-            "is {} bytes, not the {size} Mojang lists",
-            body.len()
+        return Err(crate::i18n::trf(
+            "is {got} bytes, not the {expected} Mojang lists",
+            &[
+                ("got", &body.len().to_string()),
+                ("expected", &size.to_string()),
+            ],
         ));
     }
     match sha1_hex(&body) {
         actual if actual == file.sha1 => Ok(body),
-        actual => Err(format!("is not the one Horizon pins (sha1 {actual})")),
+        actual => Err(crate::i18n::trf(
+            "is not the one Horizon pins (sha1 {actual})",
+            &[("actual", &actual)],
+        )),
     }
 }
 
@@ -428,7 +434,13 @@ fn fetch_each(
             std::thread::sleep(Duration::from_millis(100));
             waited += 1;
             if waited % 10 == 0 {
-                log(format!("{} of {} files", done.load(Relaxed), files.len()));
+                log(crate::i18n::trf(
+                    "{done} of {files} files",
+                    &[
+                        ("done", &done.load(Relaxed).to_string()),
+                        ("files", &files.len().to_string()),
+                    ],
+                ));
             }
         }
     });
@@ -439,10 +451,13 @@ fn fetch_each(
             if cancel.load(Relaxed) {
                 Err(CANCELLED.to_string())
             } else {
-                Err(format!(
-                    "{} of {} files failed, the first: {e}",
-                    errors.load(Relaxed),
-                    files.len()
+                Err(crate::i18n::trf(
+                    "{errors} of {files} files failed, the first: {e}",
+                    &[
+                        ("errors", &errors.load(Relaxed).to_string()),
+                        ("files", &files.len().to_string()),
+                        ("e", &e),
+                    ],
                 ))
             }
         }
