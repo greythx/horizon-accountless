@@ -162,14 +162,16 @@ impl Launcher {
             .unwrap_or_else(|| horizon_platform::prepare::artifacts::minecraft_dir(None));
         // The disclaimer, once: Horizon may download the game from Mojang's servers, for a
         // player who owns it. A preparation that reuses this version's imports needs nothing.
-        if self.settings.mojang_downloads_allowed_at.is_none()
-            && !backend::prepare_files_present(&backend::game_version(&tag), &minecraft)
-            && !backend::reused_imports(&tag)
-        {
+        if backend::prepare_needs_consent(
+            self.settings.mojang_downloads_allowed_at.is_some(),
+            backend::prepare_files_present(&backend::game_version(&tag), &minecraft),
+            backend::reused_imports(&tag),
+        ) {
             self.mojang_consent = Some(MojangConsentRequest::Prepare);
             return;
         }
-        horizon_launcher::mojang::CANCEL.store(false, Ordering::Relaxed);
+        // A preparation is about to start: unless one is running, an earlier cancel is stale.
+        backend::reset_download_cancel(self.preparing, &horizon_launcher::mojang::CANCEL);
         self.prepare_log.clear();
         self.prepare_error = None;
         self.prepare_log
@@ -259,8 +261,9 @@ impl Launcher {
         self.client_error = None;
         self.crash = None;
         self.prepare_log.clear();
-        // A new request: a cancel clicked on an earlier one must not stop this one.
-        horizon_launcher::mojang::CANCEL.store(false, Ordering::Relaxed);
+        // A new request: a cancel clicked on an earlier one must not stop this one, unless
+        // a preparation is running (its cancellation stays the player's).
+        backend::reset_download_cancel(self.preparing, &horizon_launcher::mojang::CANCEL);
         self.client_started =
             Some(std::time::SystemTime::now() - std::time::Duration::from_secs(2));
         self.starting_client = Some(instance.id.clone());

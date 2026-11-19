@@ -1844,6 +1844,20 @@ fn current_os() -> &'static str {
     }
 }
 
+/// Whether consent is needed for the preparation's download to continue, from the three
+/// facts that decide it: what the player allowed, what is in reach, what can be reused.
+pub fn prepare_needs_consent(consented: bool, files_present: bool, reused_imports: bool) -> bool {
+    !consented && !files_present && !reused_imports
+}
+
+/// The shared cancellation flag, reset for a new request only when no preparation is running,
+/// so a Java launch never clears a preparation's cancellation.
+pub fn reset_download_cancel(preparing: bool, cancel: &std::sync::atomic::AtomicBool) {
+    if !preparing {
+        cancel.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 /// The prepare flow's consent wall: the prefix of the preparation's "the download is not
 /// allowed yet" error, kept in ASCII so the window can spot it and offer the disclaimer
 /// instead of an error. Everything after the prefix is translated.
@@ -5514,6 +5528,27 @@ mod tests {
         assert_eq!(appimage_path_in(Some(file.as_os_str()), None, &exe), None);
         let _ = std::fs::remove_file(&file);
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn prepare_needs_consent_covers_allowed_reachable_and_reusable_paths() {
+        assert!(!prepare_needs_consent(true, false, false));
+        assert!(!prepare_needs_consent(false, true, false));
+        assert!(!prepare_needs_consent(false, false, true));
+        assert!(prepare_needs_consent(false, false, false));
+        assert!(!prepare_needs_consent(true, true, true));
+    }
+
+    #[test]
+    fn reset_download_cancel_only_clears_a_stale_flag_when_nothing_is_preparing() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let flag = AtomicBool::new(true);
+        reset_download_cancel(true, &flag);
+        assert!(flag.load(Ordering::Relaxed));
+        flag.store(false, Ordering::Relaxed);
+        reset_download_cancel(false, &flag);
+        assert!(!flag.load(Ordering::Relaxed));
     }
 
     fn prepare_test_dir(name: &str) -> PathBuf {
