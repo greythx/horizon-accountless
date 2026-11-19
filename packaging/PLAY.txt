@@ -4,7 +4,9 @@ Horizon: Minecraft Java Edition 26.3, rewritten in Rust
 Horizon is an unofficial fan project, not affiliated with, endorsed by or
 connected to Mojang Studios or Microsoft. Minecraft is a trademark of Mojang
 and Microsoft. This folder contains none of Minecraft's code, textures or
-sounds: Horizon prepares them from your own copy of Minecraft Java Edition.
+sounds: Horizon prepares them from your own copy of Minecraft Java Edition,
+or from a download from Mojang's servers once you accept the launcher's
+one-time disclaimer that you own the game.
 
 Playing through the Horizon launcher
   Nothing to do here: the launcher installed this folder, prepares the

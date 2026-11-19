@@ -5,12 +5,13 @@ ATLauncher, Modrinth App, HMCL or your own). The contract it relies on is the [L
 are in [launch-reference.md](launch-reference.md). `horizon-launcher` does all of this and is the reference
 implementation.
 
-## 0. Offline play is fine; the Minecraft files still come from your copy
+## 0. Offline play is fine; the files come from your copy or Mojang's servers
 
 Horizon contains none of Minecraft's code, textures or sounds: it prepares them from the player's own copy.
 The game itself starts with or without a signed-in Microsoft account (offline, without one; this fork has no
-sign-in at all). The pinned version's files cannot be downloaded for everyone — in this fork they come only
-from the player's own copy. One file does come from Mojang in a fresh prepare (step 3).
+sign-in at all). In this fork, the files come only from the player's own copy — or from Mojang's servers after
+a one-time disclaimer in the launcher that you own Minecraft: Java Edition. One file always comes from Mojang
+in a fresh prepare (step 3).
 
 ## 1. Pick a build
 
@@ -56,9 +57,10 @@ Preparing reads, for the `minecraft` version above:
 - its **version JSON**, **client jar**, **libraries** (Maven layout) and **assets** (`indexes/` and `objects/`).
   The official launcher keeps them under one game folder (`--minecraft-dir`); a launcher that keeps them
   elsewhere names each one (`--version-json`, `--client-jar`, `--libraries-dir`, `--assets-dir`);
-- the **server jar**, the first time only. No launcher keeps it: this fork's preparer downloads it from
-  the version JSON's `downloads.server` without asking — there is no account to check against.
-  Upstream does this only for a signed-in account the Minecraft services say owns the game;
+  this fork's launcher may download them from Mojang's servers once the player accepted a one-time
+  disclaimer that they own the game (then it keeps them in its own `minecraft/` folder);
+- the **server jar**, the first time only. No launcher keeps it: on a fresh prepare it is downloaded from
+  the version JSON's `downloads.server`, after the same disclaimer;
 - a **Java** of `java_major`. A Java your launcher manages goes in with `--java-home`.
 
 Every file is checked against the pins in `research-lock.json`, so a wrong or damaged one is refused, not used.

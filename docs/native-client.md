@@ -108,7 +108,7 @@ checked against `research-lock.json`'s pins. When an earlier import beside `--ro
 verified, it is reused and the named files aren't read. Two things no such launcher keeps:
 - **The server jar.** The first `--prepare` needs `--server-jar`. Horizon never downloads it;
   this fork's launcher downloads it (the version JSON's `downloads.server`) for a preparation,
-  unconditionally.
+  after the one-time disclaimer that the player owns Minecraft: Java Edition.
 - **Java 25.** `--java-home PATH` names a runtime the launcher manages. The preparer takes the first
   Java of the pinned version from `JAVA_HOME`, the `PATH`, `--java-home`, then the official
   launcher's runtimes.
