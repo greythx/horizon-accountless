@@ -1849,16 +1849,16 @@ fn current_os() -> &'static str {
 /// instead of an error. Everything after the prefix is translated.
 pub const CONSENT_REQUIRED_PREFIX: &str = "consent-required: ";
 
-/// The Java launch's existence check, with its pieces named: Horizon's own download first,
-/// then the chosen folder, else the default one, in the official layout the launch reads.
+/// The Java launch's existence check, with its pieces named: the chosen folder first (not
+/// part of Horizon's own download, the folder may belong to any launcher), then Horizon's
+/// own download — only when it finished whole.
 pub fn files_present(version: &str) -> bool {
     let own = data_dir().join("minecraft");
     let chosen = Settings::load()
         .minecraft_dir
         .clone()
-        .or_else(default_minecraft_dir)
-        .unwrap_or_else(|| own.clone());
-    java_files_present_in(version, &chosen, &own)
+        .or_else(default_minecraft_dir);
+    java_files_present_in(version, chosen.as_deref(), &own)
 }
 
 /// The file the launcher writes after Horizon's own download of a version finished whole:
@@ -1877,7 +1877,8 @@ pub fn reused_imports(tag: &str) -> bool {
 }
 
 /// `files_present` with its pieces named, so tests can run it without process-global Settings.
-pub(crate) fn java_files_present_in(version: &str, chosen: &Path, own: &Path) -> bool {
+/// `chosen` as `None` means no Minecraft folder is configured anywhere.
+pub(crate) fn java_files_present_in(version: &str, chosen: Option<&Path>, own: &Path) -> bool {
     let files = |dir: &Path| {
         dir.join("versions")
             .join(version)
@@ -1889,9 +1890,16 @@ pub(crate) fn java_files_present_in(version: &str, chosen: &Path, own: &Path) ->
                 .join(format!("{version}.jar"))
                 .is_file()
     };
-    // Any folder can hold a foreign install's files; Horizon's own download counts only
-    // when it finished whole (a completion record), never in part.
-    files(chosen) || official_complete(own, version)
+    let chosen_ok = chosen.map_or(false, |dir| {
+        if dir == own {
+            // Horizon's own folder counts only when it finished whole.
+            official_complete(own, version)
+        } else {
+            // A foreign install: Horizon checks what it can read, like before.
+            files(dir)
+        }
+    });
+    chosen_ok || official_complete(own, version)
 }
 
 /// Whether some folder apparently holds the files for `version` the way `sources::resolve`
@@ -1971,7 +1979,7 @@ pub fn java_game(
             && base.join(format!("{}.jar", id.display())).is_file()
     };
     let minecraft = match &chosen {
-        Some(dir) if present(dir) => dir.clone(),
+        Some(dir) if present(dir) && dir != &own => dir.clone(),
         _ if official_complete(&own, &game.minecraft) => own.clone(),
         _ => match download_game_files(&game.minecraft, &own, log) {
             Ok(own) => own,
@@ -2274,6 +2282,10 @@ pub fn preparer(
                     };
                     mojang::download(&pins, &own, os, 8, &fetch, &mojang::CANCEL, log).map_err(
                         |e| {
+                            // Cancellation passes through so the window can say so, translated.
+                            if e == mojang::CANCELLED {
+                                return e;
+                            }
                             format!(
                                 "\n  • {}",
                                 crate::i18n::trf(
@@ -5517,14 +5529,18 @@ mod tests {
         let versions = root.join("versions/26.2");
         fs::create_dir_all(&versions).unwrap();
         fs::write(versions.join("26.2.json"), b"{}").unwrap();
-        assert!(!java_files_present_in("26.2", &root, &root));
+        assert!(!java_files_present_in(
+            "26.2",
+            Some(&root),
+            &prepare_test_dir("java-absent")
+        ));
         fs::write(versions.join("26.2.jar"), b"j").unwrap();
         assert!(java_files_present_in(
             "26.2",
-            &root,
+            Some(&root),
             &prepare_test_dir("java-absent")
         ));
-        // Horizon's own download counts only when it finished whole: a completion record.
+        // Horizon's own folder counts only when it finished whole: a completion record.
         let own = prepare_test_dir("java-own");
         let own_versions = own.join("versions/26.2");
         fs::create_dir_all(&own_versions).unwrap();
@@ -5532,15 +5548,15 @@ mod tests {
         fs::write(own_versions.join("26.2.jar"), b"j").unwrap();
         assert!(!java_files_present_in(
             "26.2",
-            &prepare_test_dir("java-empty"),
+            Some(&prepare_test_dir("java-empty")),
             &own
         ));
+        assert!(!java_files_present_in("26.2", None, &own));
+        // The chosen folder being Horizon's own is a completion-record question as well.
+        assert!(!java_files_present_in("26.2", Some(&own), &own));
         fs::write(own_versions.join("26.2.horizon-downloaded"), b"").unwrap();
-        assert!(java_files_present_in(
-            "26.2",
-            &prepare_test_dir("java-empty"),
-            &own
-        ));
+        assert!(java_files_present_in("26.2", None, &own));
+        assert!(java_files_present_in("26.2", Some(&own), &own));
         for dir in [root, own] {
             fs::remove_dir_all(dir).unwrap();
         }
