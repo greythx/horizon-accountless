@@ -26,8 +26,10 @@ here.
 
 - **Prerequisites:** Rust (stable), Python 3.11+, JDK 25, git 2.38 or newer, and on Linux the ALSA and udev headers
   (`libasound2-dev libudev-dev`).
-- **Resources:** Horizon never downloads the game; it prepares its resources from your own copy of Minecraft 26.3, as
-  described in [Build from source](docs/native-client.md#run-from-a-checkout).
+- **Resources:** Horizon never downloads the game on its own; it prepares its resources from your own copy of
+  Minecraft 26.3, as described in [Build from source](docs/native-client.md#run-from-a-checkout). The launcher
+  may download the files from Mojang's servers on your machine, any listed version, but only after you accept
+  the one-time disclaimer that you own Minecraft: Java Edition (Settings > Storage > Minecraft's files).
 - **Commands:**
 
   ```sh

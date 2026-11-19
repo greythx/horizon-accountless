@@ -147,17 +147,31 @@ impl Launcher {
     }
 
     /// Prepares the selected version, its Minecraft files from the player's install. There is no
-    /// Mojang download in this fork: it prepares what the player's own install holds, or stops.
+    /// Mojang download in this fork: the player's own install, or (once the player accepted
+    /// the disclaimer) the download from Mojang's servers inside the preparation.
     pub(crate) fn prepare(&mut self) {
         let Some(tag) = self.selected().cloned() else {
             return;
         };
-        horizon_launcher::mojang::CANCEL.store(false, Ordering::Relaxed);
+        // The chosen folder, in memory, not on disk: what the worker will look in, so the
+        // preflight asks about the same folder even if writing settings failed.
         let minecraft = self
             .settings
             .minecraft_dir
             .clone()
             .unwrap_or_else(|| horizon_platform::prepare::artifacts::minecraft_dir(None));
+        // The disclaimer, once: Horizon may download the game from Mojang's servers, for a
+        // player who owns it. A preparation that reuses this version's imports needs nothing.
+        if backend::prepare_needs_consent(
+            self.settings.mojang_downloads_allowed_at.is_some(),
+            backend::prepare_files_present(&backend::game_version(&tag), &minecraft),
+            backend::reused_imports_light(&tag),
+        ) {
+            self.mojang_consent = Some(MojangConsentRequest::Prepare);
+            return;
+        }
+        // A preparation is about to start: unless one is running, an earlier cancel is stale.
+        backend::reset_download_cancel(self.preparing, &horizon_launcher::mojang::CANCEL);
         self.prepare_log.clear();
         self.prepare_error = None;
         self.prepare_log
@@ -212,7 +226,18 @@ impl Launcher {
                 .take()
                 .filter(|(flag, _)| *flag == "--server")
                 .map(|(_, ip)| ip);
-            if self.client.is_some() || self.starting_client.is_some() {
+            if self.client.is_some() || self.starting_client.is_some() || self.preparing {
+                return;
+            }
+            // The disclaimer, once: the launcher may download this version from Mojang's
+            // servers, for a player who owns it.
+            let needs = self.settings.mojang_downloads_allowed_at.is_none()
+                && instance
+                    .java
+                    .as_ref()
+                    .is_some_and(|j| !backend::files_present(&j.minecraft));
+            if needs {
+                self.mojang_consent = Some(MojangConsentRequest::Java(instance.id.clone(), server));
                 return;
             }
             self.starting_pack = None;
@@ -236,6 +261,9 @@ impl Launcher {
         self.client_error = None;
         self.crash = None;
         self.prepare_log.clear();
+        // A new request: a cancel clicked on an earlier one must not stop this one, unless
+        // a preparation is running (its cancellation stays the player's).
+        backend::reset_download_cancel(self.preparing, &horizon_launcher::mojang::CANCEL);
         self.client_started =
             Some(std::time::SystemTime::now() - std::time::Duration::from_secs(2));
         self.starting_client = Some(instance.id.clone());
@@ -271,7 +299,9 @@ impl Launcher {
     /// would (no game running or starting).
     pub(crate) fn can_join_selected(&self) -> bool {
         match self.selected_instance() {
-            Some(i) if i.java.is_some() => self.client.is_none() && self.starting_client.is_none(),
+            Some(i) if i.java.is_some() => {
+                self.client.is_none() && self.starting_client.is_none() && !self.preparing
+            }
             _ => self.can_start_selected(),
         }
     }

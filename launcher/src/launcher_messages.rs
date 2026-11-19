@@ -47,6 +47,16 @@ impl Launcher {
                             self.client_run = Some((id, Instant::now()));
                             self.step_aside(cx);
                         }
+                        // A cancel reaches the game's message boundary here too: say it
+                        // translated, whatever produced the text.
+                        Err(e) if e == horizon_launcher::mojang::CANCELLED => {
+                            self.client_error = Some(
+                                crate::i18n::tr(
+                                    "Download cancelled. Download again to go on where it stopped.",
+                                )
+                                .to_string(),
+                            )
+                        }
                         Err(e) => self.client_error = Some(e),
                     }
                 }
@@ -236,15 +246,39 @@ impl Launcher {
                 Msg::Exit(job, result) => {
                     // A preparation (or a build) ended: the disk may have changed under the pages.
                     backend::forget_prepared();
-                    let error = result.err();
+                    let waiting_for_consent = matches!(
+                        result
+                            .as_ref()
+                            .err()
+                            .map(|e| e.starts_with(backend::CONSENT_REQUIRED_PREFIX)),
+                        Some(true)
+                    );
+                    let error = match result.err() {
+                        // The preparation stopped for the one reason it may: the player never
+                        // accepted the download. Ask, instead of showing the text.
+                        Some(e) if e.starts_with(backend::CONSENT_REQUIRED_PREFIX) => {
+                            self.mojang_consent = Some(crate::MojangConsentRequest::Prepare);
+                            None
+                        }
+                        Some(e) if e == horizon_launcher::mojang::CANCELLED => Some(
+                            crate::i18n::tr(
+                                "Download cancelled. Download again to go on where it stopped.",
+                            )
+                            .to_string(),
+                        ),
+                        other => other,
+                    };
                     match job {
                         Job::Prepare => {
                             self.preparing = false;
-                            // Play pressed before the version was prepared plays now.
-                            if let Some((tag, instance)) = self.play_when_prepared.take() {
-                                if error.is_none() && backend::check_prepared(&tag) {
-                                    self.starting_pack = None;
-                                    self.start_client(tag, Some(instance));
+                            // Play pressed before the version was prepared plays now. While the
+                            // preparation waits for the download consent, the queued launch stays.
+                            if !waiting_for_consent {
+                                if let Some((tag, instance)) = self.play_when_prepared.take() {
+                                    if error.is_none() && backend::check_prepared(&tag) {
+                                        self.starting_pack = None;
+                                        self.start_client(tag, Some(instance));
+                                    }
                                 }
                             }
                             if let (None, Some(started)) = (&error, self.prepare_started.take()) {

@@ -20,7 +20,8 @@ The whole way, from picking a build to playing: [launch-guide.md](launch-guide.m
 1. Start Horizon, signed in or not: without an account the game starts offline (its online-mode
    servers will refuse the player, but the game runs). With an account that owns Minecraft: Java Edition,
    hand over that account's session (`--session-stdin`, or `--session-file`), never on the command line.
-   Horizon never downloads Mojang's files; a launcher that does downloads them only for an owner.
+   Horizon never downloads Mojang's files itself; a launcher that does downloads them only for an owner, or — in an
+   accountless launcher — only after the player accepted a one-time disclaimer that they own the game.
 2. Ask the build what it takes: `horizon-client --launch-api` prints JSON with `launch_api` (the version),
    `options` and `content` (which mods, shader packs and packs it loads). Pass only options it lists: any other is
    refused with exit code 2.

@@ -190,7 +190,7 @@ fn meta_client_jar(base: &Path, version: &str) -> Option<String> {
 }
 
 /// Where launchers keep the client jar, relative to the folder holding their `libraries`.
-fn client_jars(base: &Path, version: &str) -> Vec<String> {
+pub(crate) fn client_jars(base: &Path, version: &str) -> Vec<String> {
     let v = version;
     let mut jars: Vec<String> = meta_client_jar(base, v).into_iter().collect();
     for jar in [
@@ -243,7 +243,7 @@ pub(crate) fn sha1_file(path: &Path) -> Option<String> {
 /// `instances/<name>/` (Prism's game folder is `minecraft`, MultiMC's `.minecraft`) and the
 /// shared `libraries` and assets sit in the launcher root above `instances`, two or three
 /// folders above what players naturally pick.
-fn instance_root(dir: &Path) -> Option<PathBuf> {
+pub(crate) fn instance_root(dir: &Path) -> Option<PathBuf> {
     dir.ancestors()
         .find(|a| a.file_name() == Some(std::ffi::OsStr::new("instances")))
         .and_then(Path::parent)
@@ -252,7 +252,7 @@ fn instance_root(dir: &Path) -> Option<PathBuf> {
 
 /// The Dawn Client root above `dir`: Dawn stores its shared official cache in `cache/minecraft/`
 /// directly below `.dawn/`.
-fn dawn_root(dir: &Path) -> Option<PathBuf> {
+pub(crate) fn dawn_root(dir: &Path) -> Option<PathBuf> {
     dir.ancestors()
         .find(|a| a.file_name() == Some(std::ffi::OsStr::new(".dawn")))
         .map(Path::to_path_buf)
@@ -275,6 +275,22 @@ fn launcher_of(path: &Path) -> Option<&'static str> {
         })
 }
 
+/// The folder holding a launcher's `libraries`: the folder itself, or its `meta` (Modrinth
+/// App), `data` (GDLauncher), `datastore` (GDLauncher Next) or `cache/minecraft` (Dawn
+/// Client).
+pub(crate) fn bases(dir: &Path) -> Vec<PathBuf> {
+    [
+        dir,
+        dir.join("meta").as_path(),
+        dir.join("data").as_path(),
+        dir.join("datastore").as_path(),
+        dir.join("cache/minecraft").as_path(),
+    ]
+    .into_iter()
+    .map(Path::to_path_buf)
+    .collect()
+}
+
 /// The pinned version in one launcher folder, or what the folder lacks. The folder holding
 /// `libraries` is the folder itself or its `meta` (Modrinth App), `data` (GDLauncher) or
 /// `datastore` (GDLauncher Next) or `cache/minecraft` (Dawn Client).
@@ -284,11 +300,7 @@ pub fn find(dir: &Path, pins: &Pins) -> Result<Found, String> {
     }
     let v = &pins.version;
     let mut other = None;
-    let bases: Vec<PathBuf> = [dir.to_path_buf()]
-        .into_iter()
-        .chain(["meta", "data", "datastore", "cache/minecraft"].map(|sub| dir.join(sub)))
-        .collect();
-    for base in bases.iter().cloned() {
+    for base in bases(dir) {
         for jar in client_jars(&base, v) {
             let client = base.join(&jar);
             if !client.is_file() {
@@ -309,7 +321,7 @@ pub fn find(dir: &Path, pins: &Pins) -> Result<Found, String> {
     }
     // The official launcher writes a version's file before its game: a version picked but never
     // played, or whose download stopped, has only that, and playing it once is the fix (#14286).
-    let listed = bases
+    let listed = bases(dir)
         .iter()
         .map(|base| base.join(format!("versions/{v}/{v}.json")))
         .find(|file| file.is_file());

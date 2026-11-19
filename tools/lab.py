@@ -91,8 +91,12 @@ def game_env(base=None, **extra):
     # Local fixtures use real TCP, but need no inbound access from other machines.
     # Network/discovery suites can explicitly set HORIZON_TEST_LOOPBACK=0.
     env.setdefault("HORIZON_TEST_LOOPBACK", "1")
-    for key, prefix in (("HORIZON_HOME", "horizon-home-"), ("HORIZON_LAUNCHER_HOME", "horizon-launcher-home-"),
-                        ("XDG_DATA_HOME", "horizon-xdg-data-"), ("XDG_CONFIG_HOME", "horizon-xdg-config-")):
+    for key, prefix in (
+        ("HORIZON_HOME", "horizon-home-"),
+        ("HORIZON_LAUNCHER_HOME", "horizon-launcher-home-"),
+        ("XDG_DATA_HOME", "horizon-xdg-data-"),
+        ("XDG_CONFIG_HOME", "horizon-xdg-config-"),
+    ):
         if not env.get(key):
             env[key] = _scratch_dir(prefix)
     return env
@@ -107,8 +111,11 @@ def link_dir(target, link):
     except OSError as error:
         if sys.platform != "win32" or getattr(error, "winerror", None) != 1314:
             raise
-        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(Path(target).resolve())],
-                       check=True, capture_output=True)
+        subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(Path(target).resolve())],
+            check=True,
+            capture_output=True,
+        )
 
 
 def write_json(path, data):
@@ -136,6 +143,7 @@ def free_port():
             s.bind(("127.0.0.1", 0))
             return s.getsockname()[1]
     import fcntl
+
     locks = Path(tempfile.gettempdir()) / f"horizon-harness-ports-{os.getuid()}"
     locks.mkdir(exist_ok=True)
     for _ in range(100):
@@ -199,9 +207,15 @@ def settled(lines):
     """One player's lines of one step, in order, with the waypoint packets reduced to the last for each waypoint:
     what the locator bar shows once the step is over. Arriving in a level, vanilla sends the same waypoint more
     than once on the way there; the packet by packet order is test_locator_bar_parity's."""
+
     def waypoint(line):
         parts = line.split(" ")
-        return parts[3] if len(parts) > 3 and parts[2] in ("track", "untrack", "update") else None
+        return (
+            parts[3]
+            if len(parts) > 3 and parts[2] in ("track", "untrack", "update")
+            else None
+        )
+
     last = {waypoint(l): i for i, l in enumerate(lines) if waypoint(l)}
     return [l for i, l in enumerate(lines) if not waypoint(l) or last[waypoint(l)] == i]
 
@@ -213,14 +227,18 @@ def download(url, destination, checksum, algorithm="sha1"):
         return destination
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as stream:
+        with tempfile.NamedTemporaryFile(
+            dir=destination.parent, delete=False
+        ) as stream:
             temporary = Path(stream.name)
             request = urllib.request.Request(url, headers={"User-Agent": "horizon/0.1"})
             with urllib.request.urlopen(request, timeout=120) as response:
                 shutil.copyfileobj(response, stream)
         actual = digest(temporary, algorithm)
         if actual != checksum:
-            raise ValueError(f"Checksum mismatch for {destination.name}: expected {checksum}, got {actual}")
+            raise ValueError(
+                f"Checksum mismatch for {destination.name}: expected {checksum}, got {actual}"
+            )
         temporary.replace(destination)
     finally:
         if temporary is not None:
@@ -228,12 +246,18 @@ def download(url, destination, checksum, algorithm="sha1"):
     return destination
 
 
-LAUNCHER_HINT = ("Horizon does not download the game: install Minecraft Java Edition with the official "
-                 "launcher, play {version} once, then rerun. If the launcher uses another game directory, "
-                 "pass --minecraft-dir or set HORIZON_MINECRAFT_DIR.")
-SERVER_HINT = ("Horizon does not download the game: download the {version} server jar yourself (minecraft.net/download/server "
-               "while {version} is the current release, otherwise the downloads.server.url in your launcher's "
-               "versions/{version}/{version}.json), then pass --server-jar PATH or set HORIZON_SERVER_JAR.")
+LAUNCHER_HINT = (
+    "Horizon does not download the game for you: install Minecraft Java Edition with the official "
+    "launcher, play {version} once, then rerun. If the launcher uses another game directory, "
+    "pass --minecraft-dir or set HORIZON_MINECRAFT_DIR. (horizon-prepare itself never downloads "
+    "anything; the launcher may download the files once you accept the disclaimer.)"
+)
+SERVER_HINT = (
+    "Horizon does not download the game for you: download the {version} server jar yourself (minecraft.net/download/server "
+    "while {version} is the current release, otherwise the downloads.server.url in your launcher's "
+    "versions/{version}/{version}.json), then pass --server-jar PATH or set HORIZON_SERVER_JAR. "
+    "(horizon-prepare itself never downloads anything.)"
+)
 
 
 def minecraft_dir(override=None):
@@ -256,7 +280,9 @@ def import_copy(source, destination, checksum, algorithm="sha1", hint=""):
         raise FileNotFoundError(f"Missing {source}. {hint}".strip())
     actual = digest(source, algorithm)
     if actual != checksum:
-        raise ValueError(f"{source} is not the pinned file: expected {algorithm} {checksum}, got {actual}")
+        raise ValueError(
+            f"{source} is not the pinned file: expected {algorithm} {checksum}, got {actual}"
+        )
     with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as stream:
         temporary = Path(stream.name)
     try:
@@ -270,7 +296,9 @@ def import_copy(source, destination, checksum, algorithm="sha1", hint=""):
 def manifest_accepted(lock, checksum):
     """Mojang republishes a version JSON for asset-index changes; every known one is accepted."""
     game = lock["minecraft"]
-    return checksum == game["manifest_sha1"] or checksum in game.get("accepted_manifest_sha1", [])
+    return checksum == game["manifest_sha1"] or checksum in game.get(
+        "accepted_manifest_sha1", []
+    )
 
 
 def import_manifest(lock, directory, minecraft=None):
@@ -285,19 +313,27 @@ def import_manifest(lock, directory, minecraft=None):
     if source.is_file():
         manifest = json.loads(source.read_text(encoding="utf-8"))
         downloads = manifest.get("downloads", {})
-        if (manifest.get("id") != version
-                or downloads.get("client", {}).get("sha1") != game["client_sha1"]
-                or downloads.get("server", {}).get("sha1") != game["server_sha1"]):
+        if (
+            manifest.get("id") != version
+            or downloads.get("client", {}).get("sha1") != game["client_sha1"]
+            or downloads.get("server", {}).get("sha1") != game["server_sha1"]
+        ):
             raise ValueError(f"{source} does not describe the pinned {version} release")
         checksum = digest(source, "sha1")
         if not manifest_accepted(lock, checksum):
-            raise ValueError(f"{source} is a {version} version file Horizon does not know yet (sha1 {checksum}); "
-                             f"Mojang may have republished it. Update Horizon, or report it if this is the latest release.")
+            raise ValueError(
+                f"{source} is a {version} version file Horizon does not know yet (sha1 {checksum}); "
+                f"Mojang may have republished it. Update Horizon, or report it if this is the latest release."
+            )
         if not (destination.exists() and digest(destination, "sha1") == checksum):
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, destination)
-    elif not (destination.exists() and manifest_accepted(lock, digest(destination, "sha1"))):
-        raise FileNotFoundError(f"Missing {source}. {LAUNCHER_HINT.format(version=version)}")
+    elif not (
+        destination.exists() and manifest_accepted(lock, digest(destination, "sha1"))
+    ):
+        raise FileNotFoundError(
+            f"Missing {source}. {LAUNCHER_HINT.format(version=version)}"
+        )
     manifest = json.loads(destination.read_text(encoding="utf-8"))
     if manifest["javaVersion"]["majorVersion"] != game["java_major"]:
         raise ValueError("Manifest Java version does not match lock file")
@@ -309,8 +345,12 @@ def import_client(lock, directory, minecraft=None):
     version = lock["minecraft"]["version"]
     manifest = import_manifest(lock, directory, minecraft)
     source = minecraft_dir(minecraft) / "versions" / version / f"{version}.jar"
-    jar = import_copy(source, directory / "jars" / "client.jar", lock["minecraft"]["client_sha1"],
-                      hint=LAUNCHER_HINT.format(version=version))
+    jar = import_copy(
+        source,
+        directory / "jars" / "client.jar",
+        lock["minecraft"]["client_sha1"],
+        hint=LAUNCHER_HINT.format(version=version),
+    )
     return manifest, jar
 
 
@@ -330,7 +370,10 @@ def import_server(lock, directory, server_jar=None):
 
 def rule_system(system=None):
     """The launcher's os.name for this machine: linux, osx or windows."""
-    return system or {"Darwin": "osx", "Linux": "linux", "Windows": "windows"}[platform.system()]
+    return (
+        system
+        or {"Darwin": "osx", "Linux": "linux", "Windows": "windows"}[platform.system()]
+    )
 
 
 ARCHITECTURE_ALIASES = [{"x86_64", "amd64", "x64"}, {"arm64", "aarch64"}]
@@ -339,7 +382,10 @@ ARCHITECTURE_ALIASES = [{"x86_64", "amd64", "x64"}, {"arm64", "aarch64"}]
 def rule_architectures(architecture=None):
     """platform.machine() and its aliases: Windows reports AMD64/ARM64, Linux aarch64, macOS arm64."""
     architecture = (architecture or platform.machine()).lower()
-    return next((names for names in ARCHITECTURE_ALIASES if architecture in names), {architecture})
+    return next(
+        (names for names in ARCHITECTURE_ALIASES if architecture in names),
+        {architecture},
+    )
 
 
 def library_allowed(library, system=None, architecture=None):
@@ -351,10 +397,13 @@ def library_allowed(library, system=None, architecture=None):
         operating_system = rule.get("os", {})
         if operating_system.get("name", system) != system:
             continue
-        if "arch" in operating_system and not any(re.fullmatch(operating_system["arch"], name)
-                                                  for name in architectures):
+        if "arch" in operating_system and not any(
+            re.fullmatch(operating_system["arch"], name) for name in architectures
+        ):
             continue
-        if "version" in operating_system and not re.search(operating_system["version"], platform.release()):
+        if "version" in operating_system and not re.search(
+            operating_system["version"], platform.release()
+        ):
             continue
         if rule.get("features"):
             continue
@@ -379,18 +428,22 @@ def native_library_matches(library, architecture=None, names=None):
     if X86_CLASSIFIER.search(classifier):
         return not arm
     if arm and classifier.startswith("natives-"):
-        return names is not None and not any(f"{library['name']}-{suffix}" in names
-                                             for suffix in ("arm64", "aarch64"))
+        return names is not None and not any(
+            f"{library['name']}-{suffix}" in names for suffix in ("arm64", "aarch64")
+        )
     return True
 
 
 def client_library_artifacts(manifest, system=None, architecture=None):
     """The client libraries the official launcher installs on this OS and architecture."""
     names = {library["name"] for library in manifest["libraries"]}
-    return [library["downloads"]["artifact"] for library in manifest["libraries"]
-            if "artifact" in library.get("downloads", {})
-            and library_allowed(library, system, architecture)
-            and native_library_matches(library, architecture, names)]
+    return [
+        library["downloads"]["artifact"]
+        for library in manifest["libraries"]
+        if "artifact" in library.get("downloads", {})
+        and library_allowed(library, system, architecture)
+        and native_library_matches(library, architecture, names)
+    ]
 
 
 def import_library(artifact, destination_root, minecraft=None):
@@ -399,7 +452,9 @@ def import_library(artifact, destination_root, minecraft=None):
     if relative.is_absolute() or ".." in relative.parts or "\\" in artifact["path"]:
         raise ValueError("Unsafe library path")
     source = minecraft_dir(minecraft) / "libraries" / relative
-    hint = LAUNCHER_HINT.format(version=json.loads(LOCK.read_text(encoding="utf-8"))["minecraft"]["version"])
+    hint = LAUNCHER_HINT.format(
+        version=json.loads(LOCK.read_text(encoding="utf-8"))["minecraft"]["version"]
+    )
     return import_copy(source, destination_root / relative, artifact["sha1"], hint=hint)
 
 
@@ -409,13 +464,20 @@ def launcher_assets(manifest, minecraft=None):
     info = manifest["assetIndex"]
     index = assets / "indexes" / f"{info['id']}.json"
     if not index.is_file():
-        raise FileNotFoundError(f"Missing {index}. {LAUNCHER_HINT.format(version=manifest['id'])}")
+        raise FileNotFoundError(
+            f"Missing {index}. {LAUNCHER_HINT.format(version=manifest['id'])}"
+        )
     checksum = digest(index, "sha1")
-    known = json.loads(LOCK.read_text(encoding="utf-8"))["minecraft"].get("accepted_asset_index_sha1", [])
+    known = json.loads(LOCK.read_text(encoding="utf-8"))["minecraft"].get(
+        "accepted_asset_index_sha1", []
+    )
     if checksum != info["sha1"] and checksum not in known:
         # Mojang republishes an index under the same id (#1076); each object is still verified.
-        print(f"{index} is an asset index Horizon does not know yet (sha1 {checksum}); "
-              "using it, every file is still checked against its own SHA-1", file=sys.stderr)
+        print(
+            f"{index} is an asset index Horizon does not know yet (sha1 {checksum}); "
+            "using it, every file is still checked against its own SHA-1",
+            file=sys.stderr,
+        )
     return assets, index
 
 
@@ -423,7 +485,9 @@ def launcher_object(assets, checksum):
     """One verified object from the launcher's asset store."""
     path = assets / "objects" / checksum[:2] / checksum
     if not path.is_file():
-        raise FileNotFoundError(f"Missing asset object {path}. Play the pinned version once in the official launcher.")
+        raise FileNotFoundError(
+            f"Missing asset object {path}. Play the pinned version once in the official launcher."
+        )
     if digest(path, "sha1") != checksum:
         raise ValueError(f"Corrupt asset object {path}; let the launcher repair it")
     return path
@@ -467,7 +531,9 @@ def unpack_server(server, directory, version):
         libraries = []
         for checksum, _, relative in bundle_entries(archive, "META-INF/libraries.list"):
             destination = directory / "libraries" / "server" / relative
-            extract_verified(archive, f"META-INF/libraries/{relative}", destination, checksum)
+            extract_verified(
+                archive, f"META-INF/libraries/{relative}", destination, checksum
+            )
             libraries.append(destination)
         return game, libraries
 
@@ -480,7 +546,7 @@ class ClassReader:
         self.offset = 0
 
     def take(self, count):
-        value = self.data[self.offset:self.offset + count]
+        value = self.data[self.offset : self.offset + count]
         if len(value) != count:
             raise ValueError("Truncated class file")
         self.offset += count
@@ -490,15 +556,33 @@ class ClassReader:
         return int.from_bytes(self.take(count), "big")
 
     def attributes(self):
-        return [(self.number(2), self.take(self.number(4))) for _ in range(self.number(2))]
+        return [
+            (self.number(2), self.take(self.number(4))) for _ in range(self.number(2))
+        ]
 
     def metadata(self):
         if self.take(4) != b"\xca\xfe\xba\xbe":
             raise ValueError("Invalid class file magic")
         self.take(4)  # Minor and major version.
         pool = [None] * self.number(2)
-        sizes = {3: 4, 4: 4, 5: 8, 6: 8, 7: 2, 8: 2, 9: 4, 10: 4,
-                 11: 4, 12: 4, 15: 3, 16: 2, 17: 4, 18: 4, 19: 2, 20: 2}
+        sizes = {
+            3: 4,
+            4: 4,
+            5: 8,
+            6: 8,
+            7: 2,
+            8: 2,
+            9: 4,
+            10: 4,
+            11: 4,
+            12: 4,
+            15: 3,
+            16: 2,
+            17: 4,
+            18: 4,
+            19: 2,
+            20: 2,
+        }
         i = 1
         while i < len(pool):
             tag = self.number(1)
@@ -534,58 +618,104 @@ def inventory(jar):
                 continue
             metadata = ClassReader(archive.read(item)).metadata()
             path = PurePosixPath(item.filename)
-            source = metadata["source_file"] or path.name.split("$")[0].removesuffix(".class") + ".java"
+            source = (
+                metadata["source_file"]
+                or path.name.split("$")[0].removesuffix(".class") + ".java"
+            )
             if PurePosixPath(source).name != source or "\\" in source:
                 raise ValueError(f"Unsafe SourceFile attribute in {item.filename}")
             source_path = str(path.parent / source)
             packages[str(path.parent)] += 1
-            classes.append({"class": item.filename, "source": source_path,
-                            "bytecode_bytes": item.file_size, "methods": metadata["methods"]})
-    return {"jar_sha256": digest(jar, "sha256"), "class_count": len(classes),
-            "expected_source_files": sorted({c["source"] for c in classes}),
-            "method_count": sum(c["methods"] for c in classes),
-            "packages": dict(packages.most_common()), "classes": classes}
+            classes.append(
+                {
+                    "class": item.filename,
+                    "source": source_path,
+                    "bytecode_bytes": item.file_size,
+                    "methods": metadata["methods"],
+                }
+            )
+    return {
+        "jar_sha256": digest(jar, "sha256"),
+        "class_count": len(classes),
+        "expected_source_files": sorted({c["source"] for c in classes}),
+        "method_count": sum(c["methods"] for c in classes),
+        "packages": dict(packages.most_common()),
+        "classes": classes,
+    }
 
 
 def prepare(minecraft=None, server_jar=None):
     lock, directory = config()
     manifest, client = import_client(lock, directory, minecraft)
-    if "client_mappings" in manifest["downloads"] or "server_mappings" in manifest["downloads"]:
-        raise ValueError("This workflow targets unobfuscated releases. Older releases need a remapping stage.")
-    print(f"Imported client {manifest['id']} from {minecraft_dir(minecraft)}", flush=True)
+    if (
+        "client_mappings" in manifest["downloads"]
+        or "server_mappings" in manifest["downloads"]
+    ):
+        raise ValueError(
+            "This workflow targets unobfuscated releases. Older releases need a remapping stage."
+        )
+    print(
+        f"Imported client {manifest['id']} from {minecraft_dir(minecraft)}", flush=True
+    )
     jars = {"client": client, "server": import_server(lock, directory, server_jar)}
-    jars["server"], server_libraries = unpack_server(jars["server"], directory, manifest["id"])
-    client_libraries = [import_library(artifact, directory / "libraries" / "client", minecraft)
-                        for artifact in client_library_artifacts(manifest)]
+    jars["server"], server_libraries = unpack_server(
+        jars["server"], directory, manifest["id"]
+    )
+    client_libraries = [
+        import_library(artifact, directory / "libraries" / "client", minecraft)
+        for artifact in client_library_artifacts(manifest)
+    ]
     vf = lock["vineflower"]
-    download(vf["url"], LOCAL / "tools" / f"vineflower-{vf['version']}.jar", vf["sha256"], "sha256")
+    download(
+        vf["url"],
+        LOCAL / "tools" / f"vineflower-{vf['version']}.jar",
+        vf["sha256"],
+        "sha256",
+    )
     for side, jar in jars.items():
         data = inventory(jar)
         write_json(directory / "reports" / f"{side}-inventory.json", data)
-        print(f"{side}: {data['class_count']} classes, {data['method_count']} methods", flush=True)
-    write_json(directory / "prepared.json", {
-        "version": manifest["id"], "jars": {k: str(v.relative_to(ROOT)) for k, v in jars.items()},
-        "libraries": {"client": [str(p.relative_to(ROOT)) for p in client_libraries],
-                      "server": [str(p.relative_to(ROOT)) for p in server_libraries]},
-    })
+        print(
+            f"{side}: {data['class_count']} classes, {data['method_count']} methods",
+            flush=True,
+        )
+    write_json(
+        directory / "prepared.json",
+        {
+            "version": manifest["id"],
+            "jars": {k: str(v.relative_to(ROOT)) for k, v in jars.items()},
+            "libraries": {
+                "client": [str(p.relative_to(ROOT)) for p in client_libraries],
+                "server": [str(p.relative_to(ROOT)) for p in server_libraries],
+            },
+        },
+    )
     print(f"Artifacts: {directory}", flush=True)
 
 
 def coverage(directory, side, source_root=None):
     source_root = source_root or directory / "sources" / side
-    data = json.loads((directory / "reports" / f"{side}-inventory.json").read_text(encoding="utf-8"))
-    actual = {path.relative_to(source_root).as_posix() for path in source_root.rglob("*.java")}
+    data = json.loads(
+        (directory / "reports" / f"{side}-inventory.json").read_text(encoding="utf-8")
+    )
+    actual = {
+        path.relative_to(source_root).as_posix() for path in source_root.rglob("*.java")
+    }
     expected = set(data["expected_source_files"])
     placeholders = []
     for path in source_root.rglob("*.java"):
         contents = path.read_text(encoding="utf-8", errors="replace")
         if re.search(r"\$VF:.*(?:couldn't|could not|failed)", contents, re.IGNORECASE):
             placeholders.append(path.relative_to(source_root).as_posix())
-    return {"side": side, "input_classes": data["class_count"],
-            "expected_source_files": len(expected), "emitted_source_files": len(actual),
-            "missing_source_files": sorted(expected - actual),
-            "files_with_decompiler_error_markers": sorted(placeholders),
-            "coverage_note": "Inner classes share their SourceFile; file coverage does not prove method fidelity or recompilability."}
+    return {
+        "side": side,
+        "input_classes": data["class_count"],
+        "expected_source_files": len(expected),
+        "emitted_source_files": len(actual),
+        "missing_source_files": sorted(expected - actual),
+        "files_with_decompiler_error_markers": sorted(placeholders),
+        "coverage_note": "Inner classes share their SourceFile; file coverage does not prove method fidelity or recompilability.",
+    }
 
 
 def decompile(args):
@@ -597,8 +727,12 @@ def decompile(args):
         raise ValueError("Decompiler checksum changed; rerun prepare")
     java = shutil.which(args.java)
     if not java:
-        raise ValueError("Java not found; install JDK 25 or provide --java /path/to/java")
-    version = subprocess.run([java, "-version"], capture_output=True, text=True, check=True)
+        raise ValueError(
+            "Java not found; install JDK 25 or provide --java /path/to/java"
+        )
+    version = subprocess.run(
+        [java, "-version"], capture_output=True, text=True, check=True
+    )
     match = re.search(r'version "(\d+)', version.stderr + version.stdout)
     if not match or int(match[1]) < lock["minecraft"]["java_major"]:
         raise ValueError(f"JDK {lock['minecraft']['java_major']} or newer is required")
@@ -607,15 +741,31 @@ def decompile(args):
     for side in sides:
         destination = directory / "sources" / side
         jar = ROOT / prepared["jars"][side]
-        data = json.loads((directory / "reports" / f"{side}-inventory.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            (directory / "reports" / f"{side}-inventory.json").read_text(
+                encoding="utf-8"
+            )
+        )
         if digest(jar, "sha256") != data["jar_sha256"]:
             raise ValueError(f"{side} input changed; rerun prepare")
         if destination.exists():
-            raise ValueError(f"Output already exists: {destination}. Move it aside before rerunning; it may contain your edits.")
+            raise ValueError(
+                f"Output already exists: {destination}. Move it aside before rerunning; it may contain your edits."
+            )
         destination.parent.mkdir(parents=True, exist_ok=True)
-        stage = Path(tempfile.mkdtemp(prefix=f"{side}-incomplete-", dir=destination.parent))
-        command = [java, f"-Xmx{args.heap}", "-jar", str(tool), "--folder",
-                   "--skip-extra-files=1", "--log-level=warn", f"--thread-count={args.threads}"]
+        stage = Path(
+            tempfile.mkdtemp(prefix=f"{side}-incomplete-", dir=destination.parent)
+        )
+        command = [
+            java,
+            f"-Xmx{args.heap}",
+            "-jar",
+            str(tool),
+            "--folder",
+            "--skip-extra-files=1",
+            "--log-level=warn",
+            f"--thread-count={args.threads}",
+        ]
         command += [f"--add-external={ROOT / p}" for p in prepared["libraries"][side]]
         command += [str(jar), str(stage)]
         log = directory / "reports" / f"{side}-decompiler.log"
@@ -623,15 +773,30 @@ def decompile(args):
         with log.open("w", encoding="utf-8") as stream:
             result = subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT)
         if result.returncode:
-            raise ValueError(f"Decompiler exited {result.returncode}. Partial output retained at {stage}; see {log}")
+            raise ValueError(
+                f"Decompiler exited {result.returncode}. Partial output retained at {stage}; see {log}"
+            )
         stage.rename(destination)
         report = coverage(directory, side)
         report["java_version"] = (version.stderr + version.stdout).strip()
         report["vineflower_version"] = vf["version"]
         report["command"] = command
         write_json(directory / "reports" / f"{side}-coverage.json", report)
-        print(json.dumps({k: v for k, v in report.items() if k not in {"command", "java_version"}}, indent=2), flush=True)
-        incomplete |= bool(report["missing_source_files"] or report["files_with_decompiler_error_markers"])
+        print(
+            json.dumps(
+                {
+                    k: v
+                    for k, v in report.items()
+                    if k not in {"command", "java_version"}
+                },
+                indent=2,
+            ),
+            flush=True,
+        )
+        incomplete |= bool(
+            report["missing_source_files"]
+            or report["files_with_decompiler_error_markers"]
+        )
     return 2 if incomplete else 0
 
 
@@ -641,27 +806,44 @@ def status():
     for side in ["client", "server"]:
         report = coverage(directory, side)
         print(json.dumps(report, indent=2))
-        incomplete |= bool(report["missing_source_files"] or report["files_with_decompiler_error_markers"])
+        incomplete |= bool(
+            report["missing_source_files"]
+            or report["files_with_decompiler_error_markers"]
+        )
     return 2 if incomplete else 0
 
 
 def add_game_arguments(parser):
-    parser.add_argument("--minecraft-dir", type=Path,
-                        help="official launcher game directory with your installed copy (default: the launcher's own)")
-    parser.add_argument("--server-jar", type=Path, help="the pinned server jar you downloaded yourself")
+    parser.add_argument(
+        "--minecraft-dir",
+        type=Path,
+        help="official launcher game directory with your installed copy (default: the launcher's own)",
+    )
+    parser.add_argument(
+        "--server-jar", type=Path, help="the pinned server jar you downloaded yourself"
+    )
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    preparer = commands.add_parser("prepare", help="Import your own pinned game files, fetch the decompiler; inventory classes")
+    preparer = commands.add_parser(
+        "prepare",
+        help="Import your own pinned game files, fetch the decompiler; inventory classes",
+    )
     add_game_arguments(preparer)
-    decompiler = commands.add_parser("decompile", help="Decompile locally and check source-file coverage")
-    decompiler.add_argument("--side", choices=["client", "server", "both"], default="both")
+    decompiler = commands.add_parser(
+        "decompile", help="Decompile locally and check source-file coverage"
+    )
+    decompiler.add_argument(
+        "--side", choices=["client", "server", "both"], default="both"
+    )
     decompiler.add_argument("--java", default="java")
     decompiler.add_argument("--threads", type=int, default=4)
     decompiler.add_argument("--heap", default="6G")
-    commands.add_parser("status", help="Check source coverage and decompiler error markers")
+    commands.add_parser(
+        "status", help="Check source coverage and decompiler error markers"
+    )
     args = parser.parse_args()
     if getattr(args, "threads", 1) < 1:
         parser.error("--threads must be positive")
@@ -674,7 +856,13 @@ def main():
         if args.command == "decompile":
             return decompile(args)
         return status()
-    except (OSError, ValueError, KeyError, subprocess.CalledProcessError, zipfile.BadZipFile) as error:
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        subprocess.CalledProcessError,
+        zipfile.BadZipFile,
+    ) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 

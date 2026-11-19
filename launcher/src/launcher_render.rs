@@ -342,6 +342,9 @@ impl Render for Launcher {
         if self.pending_consent.is_some() {
             root = root.child(self.native_consent(cx));
         }
+        if self.mojang_consent.is_some() {
+            root = root.child(self.mojang_consent(cx));
+        }
         if self.welcoming() {
             root = root.child(self.welcome_screen(cx));
         }

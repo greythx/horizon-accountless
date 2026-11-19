@@ -15,14 +15,24 @@ what *this fork* does differently.
 1. **No Microsoft account system at all.** There is no sign-in, no accounts.json, no Minecraft
    session hand-off, no account settings or top-bar chip, no MCP or CLI account tools. The fork has
    no `HORIZON_MSA_CLIENT_ID` and never will, so nothing about Microsoft sign-in exists here:
-   - the game is prepared **only from the player's own Minecraft install** (any launcher's: the
-     official one, Prism, MultiMC, the Modrinth App, ATLauncher, GDLauncher), never downloaded
-     from Mojang for an "owner". One file does come from Mojang on a fresh prepare: the pinned
-     version's server jar, whose address is in your own install's version json — Horizon's
-     preparer needs it, exactly as upstream's `PLAY.txt` instructs the same download;
+   - the game is prepared from the player's own Minecraft install (any launcher's: the official
+     one, Prism, MultiMC, the Modrinth App, ATLauncher, GDLauncher), as before — or, once the
+     player accepts the one-time disclaimer ("I own Minecraft: Java Edition"), from a download
+     from Mojang's servers into the launcher's own `minecraft/` folder: any version on Mojang's
+     list for which a Java instance is made, the pinned 26.3 for the game's preparation, each
+     file checked against its size and sha1. The disclaimer is the ownership check; nothing
+     verifies it (nothing can without sign-in), as it is for every launcher without accounts.
+     `Settings > Storage > Minecraft's files > Forget` takes the consent back; the launcher
+     asks again before the next download. If no install holds the files and the disclaimer was
+     not accepted, the launcher says so; the Java instances and the preparation itself cannot
+     proceed on their own. Files downloaded this way are never redistributed or shipped in the
+     repository; they are checked against Mojang's listed hashes on the way in, exactly as
+     before. This is the same exception upstream makes (`prepare --download`, for a signed-in
+     account the Minecraft services said owns the game): this fork makes it accountless, behind
+     the disclaimer instead;
    - Java Edition (Minecraft proper, as instances of "Vanilla" or "Modded") starts from that same
-     install, with an offline placeholder name; online-mode servers refuse it, as they would any
-     offline launch;
+     install, or Horizon's own download of the version, with an offline placeholder name;
+     online-mode servers refuse it, as they would any offline launch;
    - the game itself downloads upstream Horizon's unmodified release build from
      [github.com/horizon-rust/horizon](https://github.com/horizon-rust/horizon) releases, checked
      against the release's signed checksums; that is this fork's only source of the game binary.
@@ -73,5 +83,5 @@ a merge from upstream, never a silent relicensing.
 ## Building
 
 See [launcher/README.md](launcher/README.md) and [docs/native-client.md](docs/native-client.md). There
-is nothing to configure: the built launcher starts the game offline, from the player's own Minecraft
-install.
+is nothing to configure: the built launcher starts the game offline, prepared from the player's own
+Minecraft install or (once the disclaimer is accepted) from a download from Mojang's servers.

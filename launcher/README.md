@@ -5,8 +5,9 @@
 > MIT — keep [LICENSE](../LICENSE) (and THIRD_PARTY_NOTICES.md) with all copies. What this fork changes
 > on purpose: [FORK.md](../FORK.md).
 
-A small desktop app that installs Horizon builds, prepares them from your own copy of
-Minecraft, and starts the client or a dedicated server. Built with [GPUI Fast](https://github.com/longbridge/gpui-fast),
+A small desktop app that installs Horizon builds, prepares them from your Minecraft files
+(your own install, or a one-time download from Mojang's servers after a disclaimer; see
+[FORK.md](../FORK.md)), and starts the client or a dedicated server. Built with [GPUI Fast](https://github.com/longbridge/gpui-fast),
 a fork of Zed's UI framework [GPUI](https://www.gpui.rs) that draws unchanged views from the last frame;
 it has its own Cargo workspace and is not part of the game's builds.
 
@@ -38,16 +39,18 @@ The opening, then Play ([clip](docs/opening.webm)):
   still override their respective roots; remove these overrides before using Move. A missing destination
   fails explicitly instead of silently creating empty data in the default location.
 - **Play**: prepares resources as `PLAY.txt` describes (your own installed copy of Minecraft
-  26.3, the 26.3 server jar from that install's version json — downloaded from Mojang, the one
-  file Horizon's preparation takes from there — and Java 25) and copies its sounds from your
-  install's asset store (`horizon-prepare sounds`; an install without them only
-  leaves the game silent), then starts the client. This fork never downloads the game files from
-  Mojang: preparation itself always comes from your own Minecraft install (any launcher's — the
-  official one, Prism, MultiMC, the Modrinth App, ATLauncher, GDLauncher; Settings → Minecraft
-  folder, or **From my install** on the Play page). The one exception is the 26.3 server jar,
-  downloaded once from your own install's version json — Horizon's preparer needs it, exactly as
-  upstream's `PLAY.txt` instructs. If your install lacks the pinned version, the
-  launcher says so instead of downloading it. Preparing is
+  26.3, the 26.3 server jar from that install's version json, Java 25) and copies its sounds from
+  your install's asset store (`horizon-prepare sounds`; an install without them only
+  leaves the game silent), then starts the client. When no launcher folder holds the pinned
+  version (or the version a Java instance is made for) and you accept the one-time disclaimer
+  ("I own Minecraft: Java Edition"; `Settings > Storage > Minecraft's files > Forget` takes it
+  back), the launcher downloads the files from Mojang's servers into its own `minecraft/` folder
+  — any version on Mojang's list, each file checked against its size and sha1 — and prepares from
+  those. Take the same path without the disclaimer and the launcher stops, naming what it would
+  have downloaded. Every game-file download from Mojang in this fork — the 26.3 files, any listed
+  version's files, the server jar — goes through the same one-time disclaimer. The one download
+  that isn't covered is a JDK itself: when no Java 25 is found, the launcher downloads Mojang's
+  runtime from a public CDN, as it always has. Preparing is
   horizon-prepare: linked into the launcher, used in-process when a version ships the same
   preparer sources, else that version's own `horizon-prepare`; versions released before it
   still prepare with their Python script and need Python 3.10+. Before importing,

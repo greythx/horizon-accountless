@@ -1790,13 +1790,203 @@ fn preparer_binary(dir: &Path) -> Option<PathBuf> {
 
 /// The command that starts a Java instance's Minecraft. This fork has no accounts, so the player
 /// is an offline placeholder: online-mode servers refuse it, as they refuse any offline launch
-/// without a real session. The game's files come from the player's own Minecraft install: the
-/// client jar, libraries and assets are used from the folder the launcher is set to (the same one
-/// preparing uses), never downloaded from Mojang, which only serves them to its own launcher's
-/// session. The Java it needs is the instance's own, else one found here, else Mojang's
+/// without a real session. The game's files come from the player's own Minecraft install (the
+/// folder the launcher is set to, or another launcher's), or — once the player accepts the
+/// one-time disclaimer — from Mojang's servers into Horizon's own folder, any listed version.
+/// The Java it needs is the instance's own, else one found here, else Mojang's
 /// runtimes (a public CDN, no account needed), downloaded. Loader profiles install into the
 /// same folder, beside the version, as they do in every launcher.
 /// A Java instance's game, ready to start; `server` (`host[:port]`) is joined once it has.
+/// Downloads the version into Horizon's own game folder, for a player who accepted the
+/// download, and returns the folder: any version Mojang's list names, its version file's
+/// sha1 from that list (as Mojang's own launcher checks them).
+fn download_game_files(version: &str, own: &Path, log: &dyn Fn(String)) -> Result<PathBuf, String> {
+    if Settings::load().mojang_downloads_allowed_at.is_none() {
+        return Err(crate::i18n::tr(
+            "The launcher may not download it: allow it in Settings > Storage",
+        )
+        .to_string());
+    }
+    let listed = crate::minecraft_versions::load()?;
+    let entry = listed.find(version)?;
+    let pins = sources::Pins::for_version(&entry.id, &entry.sha1);
+    let fetch = fetch_fetch();
+    let os = current_os();
+    mojang::download(&pins, own, os, 8, &fetch, &mojang::CANCEL, log)?;
+    let marker = downloaded_marker(own, &entry.id);
+    if let Err(e) = fs::write(&marker, b"") {
+        log(crate::i18n::trf(
+            "Horizon could not write the completion record for {version}: {error}",
+            &[("version", &entry.id), ("error", &e.to_string())],
+        ));
+    }
+    Ok(own.to_path_buf())
+}
+
+/// The closure every Mojang fetch in this file goes through.
+fn fetch_fetch() -> impl Fn(&str) -> Result<Vec<u8>, String> {
+    |url: &str| -> Result<Vec<u8>, String> {
+        let mut body = Vec::new();
+        get(url)?
+            .into_reader()
+            .read_to_end(&mut body)
+            .map_err(|e| e.to_string())?;
+        Ok(body)
+    }
+}
+
+/// Mojang's name for the operating system Horizon runs on.
+fn current_os() -> &'static str {
+    match sources::Os::current() {
+        sources::Os::Linux => "linux",
+        sources::Os::MacOs => "osx",
+        sources::Os::Windows => "windows",
+    }
+}
+
+/// Whether consent is needed for the preparation's download to continue, from the three
+/// facts that decide it: what the player allowed, what is in reach, what can be reused.
+pub fn prepare_needs_consent(consented: bool, files_present: bool, reused_imports: bool) -> bool {
+    !consented && !files_present && !reused_imports
+}
+
+/// The shared cancellation flag, reset for a new request only when no preparation is running,
+/// so a Java launch never clears a preparation's cancellation.
+pub fn reset_download_cancel(preparing: bool, cancel: &std::sync::atomic::AtomicBool) {
+    if !preparing {
+        cancel.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// The prepare flow's consent wall: the prefix of the preparation's "the download is not
+/// allowed yet" error, kept in ASCII so the window can spot it and offer the disclaimer
+/// instead of an error. Everything after the prefix is translated.
+pub const CONSENT_REQUIRED_PREFIX: &str = "consent-required: ";
+
+/// The Java launch's existence check, with its pieces named: the chosen folder first (not
+/// part of Horizon's own download, the folder may belong to any launcher), then Horizon's
+/// own download — only when it finished whole.
+pub fn files_present(version: &str) -> bool {
+    let own = data_dir().join("minecraft");
+    let chosen = Settings::load()
+        .minecraft_dir
+        .clone()
+        .or_else(default_minecraft_dir);
+    java_files_present_in(version, chosen.as_deref(), &own)
+}
+
+/// The file the launcher writes after Horizon's own download of a version finished whole:
+/// a marker that every required file is there, so a folder is "installed" only when the
+/// download completed, not when a stopped one left the JSON and jar behind.
+pub(crate) fn downloaded_marker(dir: &Path, version: &str) -> PathBuf {
+    dir.join("versions")
+        .join(version)
+        .join(format!("{version}.horizon-downloaded"))
+}
+
+/// The launcher prepares this version: its files can come from its own verified imports,
+/// so no consent is needed for the download to continue. Runs on the prepare thread: it
+/// verifies everything again on the way in.
+pub fn reused_imports(tag: &str) -> bool {
+    prepare::artifacts::reuse_imported(&version_dir(tag), &|_| {}).unwrap_or(false)
+}
+
+/// Cheap probe for the import-reuse path: the local lock and the import's files exist.
+/// The worker still verifies everything on the way in; this keeps the consent question
+/// off installs Horizon can reuse.
+pub fn reused_imports_light(tag: &str) -> bool {
+    fn imported(root: &Path) -> bool {
+        let Ok(lock) = prepare::artifacts::Lock::read(root) else {
+            return false;
+        };
+        lock.directory.join("manifest.json").is_file()
+            && lock.directory.join("jars/client.jar").is_file()
+    }
+    let root = version_dir(tag);
+    if imported(&root) {
+        return true;
+    }
+    fs::read_dir(versions_dir())
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .any(|entry| imported(&entry.path()))
+        })
+        .unwrap_or(false)
+}
+
+/// `files_present` with its pieces named, so tests can run it without process-global Settings.
+/// `chosen` as `None` means no Minecraft folder is configured anywhere.
+pub(crate) fn java_files_present_in(version: &str, chosen: Option<&Path>, own: &Path) -> bool {
+    let files = |dir: &Path| {
+        dir.join("versions")
+            .join(version)
+            .join(format!("{version}.json"))
+            .is_file()
+            && dir
+                .join("versions")
+                .join(version)
+                .join(format!("{version}.jar"))
+                .is_file()
+    };
+    let chosen_ok = chosen.is_some_and(|dir| {
+        if dir == own {
+            // Horizon's own folder counts only when it finished whole.
+            official_complete(own, version)
+        } else {
+            // A foreign install: Horizon checks what it can read, like before.
+            files(dir)
+        }
+    });
+    chosen_ok || official_complete(own, version)
+}
+
+/// Whether some folder apparently holds the files for `version` the way `sources::resolve`
+/// searches (existence only, never a hash): the chosen folder and its ancestors, the shared
+/// launcher root above an instance folder, any launcher's default folder, Horizon's own
+/// download (only when it finished whole). A wrong or damaged file passes and fails as before.
+pub fn prepare_files_present(version: &str, chosen: &Path) -> bool {
+    let known: Vec<(&'static str, PathBuf)> = sources::Folders::current()
+        .map(|f| sources::known_folders(sources::Os::current(), &f))
+        .unwrap_or_default();
+    prepare_files_present_in(version, chosen, &known, &data_dir().join("minecraft"))
+}
+
+/// Horizon's own download, complete: the JSON and the client jar are there, and Horizon
+/// wrote its completion record after fetching everything (libraries included).
+pub(crate) fn official_complete(dir: &Path, version: &str) -> bool {
+    let versions = dir.join("versions").join(version);
+    versions.join(format!("{version}.json")).is_file()
+        && versions.join(format!("{version}.jar")).is_file()
+        && downloaded_marker(dir, version).is_file()
+}
+
+/// `prepare_files_present` with its pieces named, so tests can run it without process-global
+/// Settings.
+pub(crate) fn prepare_files_present_in(
+    version: &str,
+    chosen: &Path,
+    known: &[(&'static str, PathBuf)],
+    own: &Path,
+) -> bool {
+    let mut dirs: Vec<PathBuf> = chosen.ancestors().take(4).map(Path::to_path_buf).collect();
+    if let Some(root) = sources::instance_root(chosen).or_else(|| sources::dawn_root(chosen)) {
+        if !dirs.contains(&root) {
+            dirs.push(root);
+        }
+    }
+    dirs.extend(known.iter().map(|(_, dir)| dir.clone()));
+    dirs.retain(|d| d != own);
+    let found = dirs.iter().any(|dir| {
+        sources::bases(dir).iter().any(|base| {
+            sources::client_jars(base, version)
+                .iter()
+                .any(|rel| base.join(rel).is_file())
+        })
+    });
+    found || official_complete(own, version)
+}
+
 pub fn java_game(
     instance: &crate::instances::Instance,
     server: Option<&str>,
@@ -1814,15 +2004,42 @@ pub fn java_game(
         token: "0".into(),
         xuid: String::new(),
     };
-    // The player's own install: the folder the launcher is set to, else the official launcher's.
-    let minecraft = Settings::load()
+    // The player's own install: the folder the launcher is set to, else the official launcher's,
+    // then Horizon's own download (only when it finished whole: a completion record).
+    let chosen = Settings::load()
         .minecraft_dir
         .clone()
-        .or_else(default_minecraft_dir)
-        .ok_or_else(|| {
-            "Minecraft is not installed here. Install it in any launcher first, so its files are on this computer, or pick the folder in Settings.".to_string()
-        })?;
+        .or_else(default_minecraft_dir);
+    let own = data_dir().join("minecraft");
     let id = mojang::relative(&game.minecraft)?;
+    let present = |dir: &Path| {
+        let base = dir.join("versions").join(&id);
+        base.join(format!("{}.json", id.display())).is_file()
+            && base.join(format!("{}.jar", id.display())).is_file()
+    };
+    let minecraft = match &chosen {
+        Some(dir) if present(dir) && dir != &own => dir.clone(),
+        _ if official_complete(&own, &game.minecraft) => own.clone(),
+        _ => match download_game_files(&game.minecraft, &own, log) {
+            Ok(own) => own,
+            Err(download) => {
+                if let Some(dir) = &chosen {
+                    return Err(crate::i18n::trf(
+                        "Minecraft {version} is not installed in {dir} ({download}). Install it there first (any launcher does it, or allow the download in Settings > Storage).",
+                        &[
+                            ("version", &game.minecraft),
+                            ("dir", &dir.display().to_string()),
+                            ("download", &download),
+                        ],
+                    ));
+                }
+                return Err(crate::i18n::trf(
+                    "Minecraft {version} is not installed here ({download}). Install it in any launcher first (or allow the download in Settings > Storage).",
+                    &[("version", &game.minecraft), ("download", &download)],
+                ));
+            }
+        },
+    };
     let natives = instance.home.join("natives").join(&id);
     // Each loader profile is installed once into the folder; it then starts offline too.
     let marker = |id: &str| -> Result<PathBuf, String> {
@@ -1836,10 +2053,9 @@ pub fn java_game(
         .join(&id)
         .join(format!("{}.json", id.display()));
     if !vanilla.is_file() {
-        return Err(format!(
-            "Minecraft {} is not installed in {}. Install it there first (any launcher does it).",
-            game.minecraft,
-            minecraft.display()
+        return Err(crate::i18n::trf(
+            "Minecraft {version} is not installed in {dir}. Install it there first (any launcher does it, or allow the download in Settings > Storage).",
+            &[("version", &game.minecraft), ("dir", &minecraft.display().to_string())],
         ));
     }
     // The Java the game needs, which also runs a loader's installer.
@@ -2063,6 +2279,11 @@ pub fn preparer(
             .and_then(|lock| sources::Pins::read(&lock))
             .ok_or("The version's research-lock.json doesn't pin the Minecraft files")?;
         let mut known = Vec::new();
+        // Horizon's own download, when the player agreed to it: any listed version.
+        let own = data_dir().join("minecraft");
+        if own.is_dir() {
+            known.push(("Horizon's own download", own.clone()));
+        }
         known.extend(
             sources::Folders::current()
                 .map(|f| sources::known_folders(sources::Os::current(), &f))
@@ -2084,7 +2305,36 @@ pub fn preparer(
             match resolved? {
                 sources::Resolved::Folder(dir) => dir,
                 sources::Resolved::NotFound(checked) => {
-                    return Err(sources::not_found(&version, &checked, minecraft));
+                    // Straight from Mojang (what is already there and whole is kept),
+                    // when the player accepted the download.
+                    if Settings::load().mojang_downloads_allowed_at.is_none() {
+                        let error = sources::not_found(&version, &checked, minecraft);
+                        return Err(crate::i18n::trf(
+                            "{error}\n  • Or allow the launcher to download {version} from Mojang in Settings > Storage, then prepare again.",
+                            &[("error", &error), ("version", &version)],
+                        ));
+                    }
+                    let os = match sources::Os::current() {
+                        sources::Os::Linux => "linux",
+                        sources::Os::MacOs => "osx",
+                        sources::Os::Windows => "windows",
+                    };
+                    mojang::download(&pins, &own, os, 8, &fetch, &mojang::CANCEL, log).map_err(
+                        |e| {
+                            // Cancellation passes through so the window can say so, translated.
+                            if e == mojang::CANCELLED {
+                                return e;
+                            }
+                            format!(
+                                "\n  • {}",
+                                crate::i18n::trf(
+                                    "Horizon tried to download {version} from Mojang, but: {e}",
+                                    &[("version", &version), ("e", &e)]
+                                )
+                            )
+                        },
+                    )?;
+                    own
                 }
             }
         }
@@ -2126,6 +2376,15 @@ pub fn preparer(
         .join("server-jars")
         .join(format!("{version}.jar"));
     if !reused && !jar.exists() {
+        if Settings::load().mojang_downloads_allowed_at.is_none() {
+            return Err(format!(
+                "{CONSENT_REQUIRED_PREFIX}{}",
+                crate::i18n::trf(
+                    "The {version} server jar is not in Horizon's folder and the launcher may not download it: allow the download in Settings > Storage first.",
+                    &[("version", &version)],
+                )
+            ));
+        }
         let json: serde_json::Value =
             serde_json::from_str(&fs::read_to_string(&manifest).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
@@ -3291,6 +3550,10 @@ pub struct Settings {
     /// First-use native code permission for this launcher install, Unix seconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_mods_allowed_at: Option<u64>,
+    /// First consent to fetch Minecraft's files from Mojang's servers for any version the
+    /// player selects in this launcher (the generic disclaimer), Unix seconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mojang_downloads_allowed_at: Option<u64>,
     /// Managed cache limit in GiB (unset: 25; zero: no automatic cleanup). Player data isn't cache.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_limit_gib: Option<u64>,
@@ -3315,6 +3578,27 @@ impl Settings {
                 .as_secs(),
         );
         self.save()
+    }
+
+    /// Remember the disclaimer's download consent. A failed save leaves the consent as it was.
+    pub fn allow_mojang_downloads(&mut self) -> Result<(), String> {
+        let allowed = self.mojang_downloads_allowed_at;
+        self.mojang_downloads_allowed_at = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|error| error.to_string())?
+                .as_secs(),
+        );
+        self.save()
+            .inspect_err(|_| self.mojang_downloads_allowed_at = allowed)
+    }
+
+    /// Take the download consent back; the launcher asks again before the next download.
+    /// A failed save leaves the consent as it was, with Forget still there to try again.
+    pub fn revoke_mojang_downloads(&mut self) -> Result<(), String> {
+        let allowed = self.mojang_downloads_allowed_at.take();
+        self.save()
+            .inspect_err(|_| self.mojang_downloads_allowed_at = allowed)
     }
 
     pub fn load() -> Self {
@@ -5269,6 +5553,129 @@ mod tests {
         assert_eq!(appimage_path_in(Some(file.as_os_str()), None, &exe), None);
         let _ = std::fs::remove_file(&file);
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn prepare_needs_consent_covers_allowed_reachable_and_reusable_paths() {
+        assert!(!prepare_needs_consent(true, false, false));
+        assert!(!prepare_needs_consent(false, true, false));
+        assert!(!prepare_needs_consent(false, false, true));
+        assert!(prepare_needs_consent(false, false, false));
+        assert!(!prepare_needs_consent(true, true, true));
+    }
+
+    #[test]
+    fn reset_download_cancel_only_clears_a_stale_flag_when_nothing_is_preparing() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let flag = AtomicBool::new(true);
+        reset_download_cancel(true, &flag);
+        assert!(flag.load(Ordering::Relaxed));
+        flag.store(false, Ordering::Relaxed);
+        reset_download_cancel(false, &flag);
+        assert!(!flag.load(Ordering::Relaxed));
+    }
+
+    fn prepare_test_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("horizon-present-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn java_files_present_needs_json_and_jar_where_the_launch_reads() {
+        let root = prepare_test_dir("java-fileset");
+        let versions = root.join("versions/26.2");
+        fs::create_dir_all(&versions).unwrap();
+        fs::write(versions.join("26.2.json"), b"{}").unwrap();
+        assert!(!java_files_present_in(
+            "26.2",
+            Some(&root),
+            &prepare_test_dir("java-absent")
+        ));
+        fs::write(versions.join("26.2.jar"), b"j").unwrap();
+        assert!(java_files_present_in(
+            "26.2",
+            Some(&root),
+            &prepare_test_dir("java-absent")
+        ));
+        // Horizon's own folder counts only when it finished whole: a completion record.
+        let own = prepare_test_dir("java-own");
+        let own_versions = own.join("versions/26.2");
+        fs::create_dir_all(&own_versions).unwrap();
+        fs::write(own_versions.join("26.2.json"), b"{}").unwrap();
+        fs::write(own_versions.join("26.2.jar"), b"j").unwrap();
+        assert!(!java_files_present_in(
+            "26.2",
+            Some(&prepare_test_dir("java-empty")),
+            &own
+        ));
+        assert!(!java_files_present_in("26.2", None, &own));
+        // The chosen folder being Horizon's own is a completion-record question as well.
+        assert!(!java_files_present_in("26.2", Some(&own), &own));
+        fs::write(own_versions.join("26.2.horizon-downloaded"), b"").unwrap();
+        assert!(java_files_present_in("26.2", None, &own));
+        assert!(java_files_present_in("26.2", Some(&own), &own));
+        for dir in [root, own] {
+            fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn prepare_files_present_finds_a_prisms_maven_layout_in_the_search_set() {
+        let root = prepare_test_dir("prism-fileset");
+        let maven = root.join("libraries/com/mojang/minecraft/26.3");
+        fs::create_dir_all(&maven).unwrap();
+        fs::write(maven.join("minecraft-26.3-client.jar"), b"j").unwrap();
+        assert!(prepare_files_present_in(
+            "26.3",
+            &root,
+            &[],
+            &prepare_test_dir("prism-absent")
+        ));
+        assert!(!prepare_files_present_in(
+            "26.2",
+            &root,
+            &[],
+            &prepare_test_dir("prism-absent")
+        ));
+        // The launcher's root above a chosen instance folder counts.
+        let parent = prepare_test_dir("ancestor-fileset");
+        let child = parent.join("sub/child");
+        fs::create_dir_all(&child).unwrap();
+        let versions = parent.join("versions/26.3");
+        fs::create_dir_all(&versions).unwrap();
+        fs::write(versions.join("26.3.json"), b"{}").unwrap();
+        fs::write(versions.join("26.3.jar"), b"j").unwrap();
+        assert!(prepare_files_present_in(
+            "26.3",
+            &child,
+            &[],
+            &prepare_test_dir("prism-absent")
+        ));
+        // A Horizon completion record in Horizon's own folder answers too.
+        let own = prepare_test_dir("own-fileset");
+        let own_versions = own.join("versions/26.3");
+        fs::create_dir_all(&own_versions).unwrap();
+        fs::write(own_versions.join("26.3.json"), b"{}").unwrap();
+        fs::write(own_versions.join("26.3.jar"), b"j").unwrap();
+        assert!(!prepare_files_present_in(
+            "26.3",
+            &prepare_test_dir("absent-fileset"),
+            &[],
+            &own
+        ));
+        fs::write(own_versions.join("26.3.horizon-downloaded"), b"").unwrap();
+        assert!(prepare_files_present_in(
+            "26.3",
+            &prepare_test_dir("absent-fileset"),
+            &[],
+            &own
+        ));
+        fs::remove_dir_all(own).unwrap();
+        fs::remove_dir_all(parent).unwrap();
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

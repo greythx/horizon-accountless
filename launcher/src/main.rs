@@ -12,6 +12,7 @@ mod launcher_messages;
 mod launcher_play;
 mod launcher_render;
 mod launcher_setup;
+mod mojang_consent;
 mod widgets;
 pub(crate) use widgets::*;
 mod agents_page;
@@ -105,6 +106,7 @@ use horizon_launcher::instances;
 use horizon_launcher::native_mods;
 use horizon_launcher::native_status;
 use horizon_launcher::storage;
+use mojang_consent::MojangConsentRequest;
 use native_consent::PendingConsent;
 use scrollbar::Scrollbar;
 use std::borrow::Cow;
@@ -297,6 +299,13 @@ struct Launcher {
     pending_consent: Option<PendingConsent>,
     /// Why the last Allow or Cancel failed, shown inside the dialog that the page is behind.
     consent_error: Option<String>,
+    /// The Minecraft download disclaimer under way (#434): the prepare tag or the java
+    /// instance it resumes once the player agrees they own the game.
+    mojang_consent: Option<MojangConsentRequest>,
+    /// The disclaimer's checkbox: nothing downloads until it is ticked.
+    mojang_consent_checked: bool,
+    /// Why the last Allow failed, shown inside the dialog that the page is behind.
+    mojang_consent_error: Option<String>,
     /// The instance (id) the build under way, or the last one's error, is for.
     native_for: Option<String>,
     /// The native mods the build under way (or the last one) was given (`native_build.rs`).
