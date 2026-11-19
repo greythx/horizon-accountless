@@ -172,8 +172,13 @@ impl Launcher {
         self.mojang_consent = Some(MojangConsentRequest::Consent);
     }
 
-    /// The download question under way: Cancel starts nothing.
+    /// The download question under way: Cancel starts nothing. A queued launch of a
+    /// preparation that stopped for the consent dies with it; consent granted later never
+    /// starts it.
     pub(crate) fn cancel_mojang_consent(&mut self) {
+        if mojang_consent::cancel_drops_queue(&self.mojang_consent) {
+            self.play_when_prepared = None;
+        }
         if let Err(error) =
             mojang_consent::resolve(&mut self.mojang_consent, false, &mut self.settings)
         {

@@ -12,6 +12,12 @@ pub(super) enum MojangConsentRequest {
     Consent,
 }
 
+/// Whether a cancel dropped by the consent question carries a queued launch with it: only
+/// the preparation's own queue, never a start or a settings-only consent.
+pub(super) fn cancel_drops_queue(pending: &Option<MojangConsentRequest>) -> bool {
+    matches!(pending, Some(MojangConsentRequest::Prepare))
+}
+
 /// Consume exactly one request. Consent is persisted before the action returns to run;
 /// Cancel and Escape both use `allow = false`, and cannot return a runnable action.
 /// A failed save keeps the request, so the player can retry or leave it.
@@ -34,6 +40,17 @@ pub(super) fn resolve(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cancel_drops_only_a_queued_preparation() {
+        assert!(cancel_drops_queue(&Some(MojangConsentRequest::Prepare)));
+        assert!(!cancel_drops_queue(&Some(MojangConsentRequest::Java(
+            "one".into(),
+            None
+        ))));
+        assert!(!cancel_drops_queue(&Some(MojangConsentRequest::Consent)));
+        assert!(!cancel_drops_queue(&None));
+    }
 
     #[test]
     fn cancel_grants_nothing_and_allow_persists_the_consent() {
