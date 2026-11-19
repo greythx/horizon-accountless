@@ -165,7 +165,7 @@ impl Launcher {
         if backend::prepare_needs_consent(
             self.settings.mojang_downloads_allowed_at.is_some(),
             backend::prepare_files_present(&backend::game_version(&tag), &minecraft),
-            backend::reused_imports(&tag),
+            backend::reused_imports_light(&tag),
         ) {
             self.mojang_consent = Some(MojangConsentRequest::Prepare);
             return;

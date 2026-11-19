@@ -1885,9 +1885,34 @@ pub(crate) fn downloaded_marker(dir: &Path, version: &str) -> PathBuf {
 }
 
 /// The launcher prepares this version: its files can come from its own verified imports,
-/// so no consent is needed for the download to continue.
+/// so no consent is needed for the download to continue. Runs on the prepare thread: it
+/// verifies everything again on the way in.
 pub fn reused_imports(tag: &str) -> bool {
     prepare::artifacts::reuse_imported(&version_dir(tag), &|_| {}).unwrap_or(false)
+}
+
+/// Cheap probe for the import-reuse path: the local lock and the import's files exist.
+/// The worker still verifies everything on the way in; this keeps the consent question
+/// off installs Horizon can reuse.
+pub fn reused_imports_light(tag: &str) -> bool {
+    fn imported(root: &Path) -> bool {
+        let Ok(lock) = prepare::artifacts::Lock::read(root) else {
+            return false;
+        };
+        lock.directory.join("manifest.json").is_file()
+            && lock.directory.join("jars/client.jar").is_file()
+    }
+    let root = version_dir(tag);
+    if imported(&root) {
+        return true;
+    }
+    fs::read_dir(versions_dir())
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .any(|entry| imported(&entry.path()))
+        })
+        .unwrap_or(false)
 }
 
 /// `files_present` with its pieces named, so tests can run it without process-global Settings.
@@ -1904,7 +1929,7 @@ pub(crate) fn java_files_present_in(version: &str, chosen: Option<&Path>, own: &
                 .join(format!("{version}.jar"))
                 .is_file()
     };
-    let chosen_ok = chosen.map_or(false, |dir| {
+    let chosen_ok = chosen.is_some_and(|dir| {
         if dir == own {
             // Horizon's own folder counts only when it finished whole.
             official_complete(own, version)
