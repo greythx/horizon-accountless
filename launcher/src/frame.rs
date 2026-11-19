@@ -15,8 +15,10 @@ use std::rc::Rc;
 /// The rail's distance from the window's edges (`m-3.5`).
 pub const MARGIN: f32 = 14.;
 
-/// The rail's width at rest (icons) and open (icons and names), while the pointer is on it.
+/// The glass top bar's edition switch, its width in the strip.
 pub const RAIL: f32 = 80.;
+/// The rail's width: a permanent plate, 14 from the window's edges; the page reserves the same
+/// room, so nothing sits under it.
 pub const RAIL_OPEN: f32 = 248.;
 /// What drifting particles (Taiga's snow, Hypr Neon's streaks, leaves, petals) keep clear of in a
 /// window of `w` by `h`: the title and top bars, the rail, and the text. Home's hero text sits in
@@ -26,7 +28,7 @@ pub fn keep_clear(w: f32, h: f32, home: bool) -> rain::Keep {
     const TOP: f32 = 32. + MARGIN + theme::TOPBAR;
     const HERO: f32 = 400.;
     const HERO_WIDTH: f32 = 640.;
-    let left = MARGIN + RAIL;
+    let left = MARGIN + RAIL_OPEN;
     let body = if home { HERO } else { TOP };
     rain::Keep([
         [0., 0., w, TOP],
@@ -38,55 +40,11 @@ pub fn keep_clear(w: f32, h: f32, home: bool) -> rain::Keep {
     ])
 }
 
-/// How the rail opens and shuts: quick, settling from a little past its width.
-const RAIL_MOTION: horizon_theme::Motion = horizon_theme::Motion {
-    name: "rail",
-    ms: 320,
-    curve: [0.22, 0.9, 0.3, 1.08],
-};
-
-/// The rail's state: whether the pointer is on it, and where its last opening or shutting began.
+/// The rail's state: the instance list's scroll, for the cue that more rows sit below.
 #[derive(Default)]
 pub struct Rail {
-    pub hovered: bool,
-    open: bool,
-    since: Option<Instant>,
-    from: f32,
-    at: f32,
     /// The instance list's scroll, for the cue that more rows sit below.
     list: gpui::ScrollHandle,
-}
-
-impl Rail {
-    /// How far open the rail is, 0 to 1 (a little past 1 as it settles). `pinned`: something it
-    /// opened is still open (a row's menu), so it stays open without the pointer. Frames are asked
-    /// for only while it moves; under reduced motion it jumps.
-    pub fn progress(&mut self, window: &mut Window, pinned: bool) -> f32 {
-        // `HORIZON_LAUNCHER_RAIL_OPEN=1` holds it open, for screenshots.
-        static HELD: std::sync::LazyLock<bool> =
-            std::sync::LazyLock::new(|| std::env::var_os("HORIZON_LAUNCHER_RAIL_OPEN").is_some());
-        let want = self.hovered || pinned || *HELD;
-        if want != self.open {
-            self.open = want;
-            self.from = self.at;
-            self.since = Some(Instant::now());
-        }
-        let to = if want { 1. } else { 0. };
-        let t = match self.since {
-            Some(since) if !crate::motion::still() => {
-                since.elapsed().as_secs_f32() / RAIL_MOTION.secs()
-            }
-            _ => 1.,
-        };
-        if t >= 1. {
-            self.since = None;
-            self.at = to;
-            return to;
-        }
-        self.at = self.from + (to - self.from) * RAIL_MOTION.ease(t);
-        window.request_animation_frame();
-        self.at
-    }
 }
 
 /// The ⋮ menu of a sidebar row while open: whose, and whether Delete… was pressed once.
@@ -384,9 +342,9 @@ impl Launcher {
         out
     }
 
-    /// The rail: a strip of instance icons that opens into names, states and links while the
-    /// pointer is on it (or one of its menus is open). It opens over the page, which keeps the
-    /// collapsed rail's room, so the page never moves or squeezes under the pointer. Its foot keeps the project's links, Settings and the version.
+    /// The rail: a strip of instance icons and names, states and links. A permanent plate; the
+    /// page reserves its room, so nothing sits under it. Its foot keeps the project's links,
+    /// Settings and the version.
     pub(super) fn glass_rail(
         &mut self,
         window: &mut Window,
@@ -395,11 +353,9 @@ impl Launcher {
         let t = self.theme;
         let soft = self.look.accent_soft;
         self.load_packs();
-        let pinned = self.row_menu.open.is_some();
-        let p = self.rail.progress(window, pinned);
-        let open = p > 0.5;
-        // Names and lines fade in over the second half of the opening, as the width arrives.
-        let label = ((p - 0.35) / 0.65).clamp(0., 1.);
+        // The rail is permanent: names always show.
+        let open = true;
+        let label = 1.0;
         let fade = move |d: Div| d.min_w_0().overflow_hidden().opacity(label);
 
         // Add instance: the accent's outline, not the sun gradient, so Play stays the one bright
@@ -601,6 +557,7 @@ impl Launcher {
             .w(px(RAIL_OPEN))
             .my(px(MARGIN))
             .ml(px(MARGIN))
+            .occlude()
             .overflow_hidden()
             .child(add.relative())
             .child(list.relative())

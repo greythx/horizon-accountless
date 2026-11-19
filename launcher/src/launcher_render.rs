@@ -273,15 +273,14 @@ impl Render for Launcher {
                     .opacity(ui)
                     .top(px(theme::RISE * (1. - ui)))
                     .child(topbar)
-                    // The page keeps the collapsed rail's room; the rail opens over it, so the
-                    // page never moves or squeezes when the pointer reaches for an instance.
+                    // The page keeps the rail's room; the rail is permanent, so nothing sits under it.
                     .child(
                         div()
                             .relative()
                             .flex()
                             .flex_1()
                             .min_h_0()
-                            .child(div().flex_none().w(px(frame::MARGIN + frame::RAIL)))
+                            .child(div().flex_none().w(px(frame::MARGIN + frame::RAIL_OPEN)))
                             .child(div().flex().flex_col().flex_1().min_w_0().child(page))
                             .child(
                                 div()
