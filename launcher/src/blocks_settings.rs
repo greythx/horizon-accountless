@@ -161,6 +161,41 @@ impl Launcher {
         self.instance_mods_changed();
     }
 
+    /// The download question under way: Cancel starts nothing.
+    pub(crate) fn cancel_mojang_consent(&mut self) {
+        if let Err(error) =
+            mojang_consent::resolve(&mut self.mojang_consent, false, &mut self.settings)
+        {
+            self.mojang_consent_error = Some(error);
+        } else {
+            self.mojang_consent_checked = false;
+            self.mojang_consent_error = None;
+        }
+    }
+
+    /// Allow the download and resume the action the player picked.
+    pub(crate) fn allow_mojang_consent(&mut self) {
+        match mojang_consent::resolve(&mut self.mojang_consent, true, &mut self.settings) {
+            Err(error) => self.mojang_consent_error = Some(error),
+            Ok(Some(MojangConsentRequest::Prepare)) => {
+                self.mojang_consent_checked = false;
+                self.mojang_consent_error = None;
+                self.prepare();
+            }
+            Ok(Some(MojangConsentRequest::Java(id, server))) => {
+                self.mojang_consent_checked = false;
+                self.mojang_consent_error = None;
+                match self.instances.list.iter().find(|i| i.id == id).cloned() {
+                    Some(instance) => self.start_java(instance, server),
+                    None => {
+                        self.mojang_consent_error = Some(tr("That instance is gone.").to_string())
+                    }
+                }
+            }
+            Ok(None) => {}
+        }
+    }
+
     pub(crate) fn native_consent(&self, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         // The mods asked about, when known (a build with none enabled names none).
@@ -214,6 +249,60 @@ impl Launcher {
                         }
                         cx.notify();
                     }))
+                        }
+                    })
+                ))
+    }
+
+    /// The generic disclaimer, once, before the launcher downloads Minecraft's files from
+    /// Mojang's servers (#434). Not shown when the files are in an install or Horizon's own
+    /// folder, or when the player already agreed.
+    pub(crate) fn mojang_consent(&self, cx: &mut Context<Self>) -> Div {
+        let t = self.theme;
+        let checked = self.mojang_consent_checked;
+        let checkbox = |id: &'static str, on: bool| {
+            div()
+                .id(id)
+                .flex_none()
+                .size(px(18.))
+                .border_1()
+                .border_color(if on { t.accent } else { t.muted })
+                .bg(if on { t.accent } else { t.surface })
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(t.on_accent)
+                .text_size(px(12.))
+                .cursor_pointer()
+                .when(on, |d| d.child("✓"))
+        };
+        div().absolute().inset_0().occlude().flex().items_center().justify_center().bg(crate::glass_ui::scrim())
+            .child(plate(&t).w(px(520.)).p(px(28.)).bg(t.surface).rounded(px(16.)).border_1().border_color(t.rule).shadow_lg().flex().flex_col().gap(px(18.))
+                .child(div().size(px(48.)).rounded(px(12.)).bg(t.warn.opacity(0.12)).flex().items_center().justify_center().child(crate::glass_ui::icon("information-circle", 26., t.warn)))
+                .child(div().text_size(px(24.)).font_weight(FontWeight::BOLD).child(tr("Download Minecraft's files?")))
+                .child(tr("Horizon doesn't include Minecraft's files. It can download them from Mojang's servers, for any version you select, to this computer. The files are used only to play and are never shared."))
+                .child(tr("You must own Minecraft: Java Edition. Horizon remembers your choice; take it back in Settings > Storage."))
+                .child(div().flex().items_center().gap(px(10.))
+                    .child(checkbox("mojang-own", checked).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.mojang_consent_checked = !this.mojang_consent_checked;
+                        cx.notify();
+                    })))
+                    .child(div().font_weight(FontWeight::BOLD).child(tr("I own Minecraft: Java Edition"))))
+                .children(self.mojang_consent_error.clone().map(|error| div().text_color(t.danger).child(error)))
+                .child(div().flex().justify_end().gap(px(12.))
+                    .child(button("mojang-cancel", "Cancel", Kind::Secondary, &t).w(px(120.)).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.cancel_mojang_consent();
+                        cx.notify();
+                    })))
+                    .child({
+                        let allow = button("mojang-download", "Download", Kind::Primary, &t).w(px(120.));
+                        if !checked {
+                            disabled(allow)
+                        } else {
+                            allow.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                this.allow_mojang_consent();
+                                cx.notify();
+                            }))
                         }
                     })
                 ))

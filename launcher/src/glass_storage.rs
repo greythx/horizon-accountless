@@ -300,6 +300,35 @@ impl Launcher {
                 None,
             ));
         }
+        if self.settings.mojang_downloads_allowed_at.is_some() {
+            // The disclaimer's consent: no files to move, just the permission. Forget asks
+            // once and Horizon asks again before the next download.
+            card = card.child(ui::setting_row(
+                tr("Minecraft's files"),
+                Some(
+                    div()
+                        .child(tr(
+                            "Allowed: Horizon may download them from Mojang's servers, for the versions you select. Forget takes the consent back.",
+                        ))
+                        .into_any_element(),
+                ),
+                Some(
+                    button(
+                        "storage-forget-mojang",
+                        "Forget",
+                        Kind::Secondary,
+                        &t,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Err(error) = this.settings.revoke_mojang_downloads() {
+                            this.storage_revoke_error = Some(error);
+                        }
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                ),
+            ));
+        }
         div()
             .flex()
             .flex_col()

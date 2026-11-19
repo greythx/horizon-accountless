@@ -147,11 +147,20 @@ impl Launcher {
     }
 
     /// Prepares the selected version, its Minecraft files from the player's install. There is no
-    /// Mojang download in this fork: it prepares what the player's own install holds, or stops.
+    /// Mojang download in this fork: the player's own install, or (once the player accepted
+    /// the disclaimer) the download from Mojang's servers inside the preparation.
     pub(crate) fn prepare(&mut self) {
         let Some(tag) = self.selected().cloned() else {
             return;
         };
+        // The disclaimer, once: Horizon may download the game from Mojang's servers, for a
+        // player who owns it.
+        if self.settings.mojang_downloads_allowed_at.is_none()
+            && !backend::files_present(&backend::game_version(&tag))
+        {
+            self.mojang_consent = Some(MojangConsentRequest::Prepare);
+            return;
+        }
         horizon_launcher::mojang::CANCEL.store(false, Ordering::Relaxed);
         let minecraft = self
             .settings
@@ -213,6 +222,17 @@ impl Launcher {
                 .filter(|(flag, _)| *flag == "--server")
                 .map(|(_, ip)| ip);
             if self.client.is_some() || self.starting_client.is_some() {
+                return;
+            }
+            // The disclaimer, once: the launcher may download this version from Mojang's
+            // servers, for a player who owns it.
+            let needs = self.settings.mojang_downloads_allowed_at.is_none()
+                && instance
+                    .java
+                    .as_ref()
+                    .is_some_and(|j| !backend::files_present(&j.minecraft));
+            if needs {
+                self.mojang_consent = Some(MojangConsentRequest::Java(instance.id.clone(), server));
                 return;
             }
             self.starting_pack = None;

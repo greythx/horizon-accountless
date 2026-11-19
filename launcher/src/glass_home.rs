@@ -682,7 +682,7 @@ impl Launcher {
                     })
                     .into(),
                     trf(
-                        "Read {version}'s files from your own copy",
+                        "Read {version}'s files from your install, or download them from Mojang",
                         &[("version", &version)],
                     ),
                     locked,
