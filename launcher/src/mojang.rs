@@ -109,8 +109,9 @@ pub fn download(
                 .join(relative(&text(logging, "id")?)?),
         });
     }
-    log(format!(
-        "Downloading Minecraft {v} from Mojang: the game and {libraries} libraries"
+    log(crate::i18n::trf(
+        "Downloading Minecraft {v} from Mojang: the game and {libraries} libraries",
+        &[("v", &v.to_string()), ("libraries", &libraries.to_string())],
     ));
     fetch_all(&game, jobs, fetch, cancel, log)?;
     let index = &manifest["assetIndex"];
@@ -125,7 +126,10 @@ pub fn download(
     let assets = fetch_all(std::slice::from_ref(&index), 1, fetch, cancel, log)
         .and_then(|_| objects(&read_json(&index.path)?, dir))
         .and_then(|objects| {
-            log(format!("Downloading the sounds ({} files)", objects.len()));
+            log(crate::i18n::trf(
+                "Downloading the sounds ({files} files)",
+                &[("files", &objects.len().to_string())],
+            ));
             // A connection that fails now and then is tried again, and a file that still fails
             // does not stop the others: the next download fetches what is left.
             let retrying = |url: &str| {
@@ -142,7 +146,10 @@ pub fn download(
         });
     match assets {
         Err(e) if e == CANCELLED => return Err(e),
-        Err(e) => log(format!("The sounds could not all be downloaded: {e}")),
+        Err(e) => log(crate::i18n::trf(
+            "The sounds could not all be downloaded: {e}",
+            &[("e", &e)],
+        )),
         Ok(()) => {}
     }
     Ok(())
@@ -427,11 +434,18 @@ fn fetch_each(
     });
     TOTAL.store(0, Relaxed);
     match failed.into_inner().unwrap() {
-        Some(e) if !stop_on_error && e != CANCELLED => Err(format!(
-            "{} of {} files failed, the first: {e}",
-            errors.load(Relaxed),
-            files.len()
-        )),
+        Some(e) if !stop_on_error && e != CANCELLED => {
+            // A clicked Cancel outranks earlier asset failures: stop, don't continue.
+            if cancel.load(Relaxed) {
+                Err(CANCELLED.to_string())
+            } else {
+                Err(format!(
+                    "{} of {} files failed, the first: {e}",
+                    errors.load(Relaxed),
+                    files.len()
+                ))
+            }
+        }
         Some(e) => Err(e),
         None => Ok(()),
     }

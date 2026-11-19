@@ -156,7 +156,7 @@ impl Launcher {
         // The disclaimer, once: Horizon may download the game from Mojang's servers, for a
         // player who owns it.
         if self.settings.mojang_downloads_allowed_at.is_none()
-            && !backend::files_present(&backend::game_version(&tag))
+            && !backend::prepare_files_present(&backend::game_version(&tag))
         {
             self.mojang_consent = Some(MojangConsentRequest::Prepare);
             return;
@@ -256,6 +256,8 @@ impl Launcher {
         self.client_error = None;
         self.crash = None;
         self.prepare_log.clear();
+        // A new request: a cancel clicked on an earlier one must not stop this one.
+        horizon_launcher::mojang::CANCEL.store(false, Ordering::Relaxed);
         self.client_started =
             Some(std::time::SystemTime::now() - std::time::Duration::from_secs(2));
         self.starting_client = Some(instance.id.clone());

@@ -161,6 +161,17 @@ impl Launcher {
         self.instance_mods_changed();
     }
 
+    /// The disclaimer from Settings > Storage, for a player who has not accepted it yet:
+    /// the same dialog, with nothing to resume.
+    pub(crate) fn request_mojang_consent(&mut self) {
+        if self.settings.mojang_downloads_allowed_at.is_some() {
+            return;
+        }
+        self.mojang_consent_checked = false;
+        self.mojang_consent_error = None;
+        self.mojang_consent = Some(MojangConsentRequest::Consent);
+    }
+
     /// The download question under way: Cancel starts nothing.
     pub(crate) fn cancel_mojang_consent(&mut self) {
         if let Err(error) =
@@ -177,6 +188,10 @@ impl Launcher {
     pub(crate) fn allow_mojang_consent(&mut self) {
         match mojang_consent::resolve(&mut self.mojang_consent, true, &mut self.settings) {
             Err(error) => self.mojang_consent_error = Some(error),
+            Ok(Some(MojangConsentRequest::Consent)) => {
+                self.mojang_consent_checked = false;
+                self.mojang_consent_error = None;
+            }
             Ok(Some(MojangConsentRequest::Prepare)) => {
                 self.mojang_consent_checked = false;
                 self.mojang_consent_error = None;

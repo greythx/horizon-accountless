@@ -328,6 +328,31 @@ impl Launcher {
                     .into_any_element(),
                 ),
             ));
+        } else {
+            // Never given: the one question the game asks before it may download anything.
+            card = card.child(ui::setting_row(
+                tr("Minecraft's files"),
+                Some(
+                    div()
+                        .child(tr(
+                            "Not allowed: Horizon asks before it downloads them from Mojang's servers.",
+                        ))
+                        .into_any_element(),
+                ),
+                Some(
+                    button(
+                        "storage-allow-mojang",
+                        "Allow…",
+                        Kind::Secondary,
+                        &t,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.request_mojang_consent();
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                ),
+            ));
         }
         div()
             .flex()

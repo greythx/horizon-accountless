@@ -8,23 +8,27 @@ pub(super) enum MojangConsentRequest {
     Prepare,
     /// The Java instance to start, by id, and the server it joins, if any.
     Java(String, Option<String>),
+    /// Nothing to resume: the player opened the question from Settings > Storage.
+    Consent,
 }
 
 /// Consume exactly one request. Consent is persisted before the action returns to run;
 /// Cancel and Escape both use `allow = false`, and cannot return a runnable action.
+/// A failed save keeps the request, so the player can retry or leave it.
 pub(super) fn resolve(
     pending: &mut Option<MojangConsentRequest>,
     allow: bool,
     settings: &mut Settings,
 ) -> Result<Option<MojangConsentRequest>, String> {
-    let Some(request) = pending.take() else {
+    if pending.is_none() {
         return Ok(None);
-    };
+    }
     if !allow {
+        pending.take();
         return Ok(None);
     }
     settings.allow_mojang_downloads()?;
-    Ok(Some(request))
+    Ok(pending.take())
 }
 
 #[cfg(test)]

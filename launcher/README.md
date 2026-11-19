@@ -47,9 +47,10 @@ The opening, then Play ([clip](docs/opening.webm)):
   back), the launcher downloads the files from Mojang's servers into its own `minecraft/` folder
   — any version on Mojang's list, each file checked against its size and sha1 — and prepares from
   those. Take the same path without the disclaimer and the launcher stops, naming what it would
-  have downloaded. Every download from Mojang in this fork — game files for any listed version,
-  the 26.3 server jar — goes through the same one-time disclaimer; nothing reaches Mojang's
-  servers otherwise. Preparing is
+  have downloaded. Every game-file download from Mojang in this fork — the 26.3 files, any listed
+  version's files, the server jar — goes through the same one-time disclaimer. The one download
+  that isn't covered is a JDK itself: when no Java 25 is found, the launcher downloads Mojang's
+  runtime from a public CDN, as it always has. Preparing is
   horizon-prepare: linked into the launcher, used in-process when a version ships the same
   preparer sources, else that version's own `horizon-prepare`; versions released before it
   still prepare with their Python script and need Python 3.10+. Before importing,

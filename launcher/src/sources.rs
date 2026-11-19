@@ -243,7 +243,7 @@ pub(crate) fn sha1_file(path: &Path) -> Option<String> {
 /// `instances/<name>/` (Prism's game folder is `minecraft`, MultiMC's `.minecraft`) and the
 /// shared `libraries` and assets sit in the launcher root above `instances`, two or three
 /// folders above what players naturally pick.
-fn instance_root(dir: &Path) -> Option<PathBuf> {
+pub(crate) fn instance_root(dir: &Path) -> Option<PathBuf> {
     dir.ancestors()
         .find(|a| a.file_name() == Some(std::ffi::OsStr::new("instances")))
         .and_then(Path::parent)
@@ -252,7 +252,7 @@ fn instance_root(dir: &Path) -> Option<PathBuf> {
 
 /// The Dawn Client root above `dir`: Dawn stores its shared official cache in `cache/minecraft/`
 /// directly below `.dawn/`.
-fn dawn_root(dir: &Path) -> Option<PathBuf> {
+pub(crate) fn dawn_root(dir: &Path) -> Option<PathBuf> {
     dir.ancestors()
         .find(|a| a.file_name() == Some(std::ffi::OsStr::new(".dawn")))
         .map(Path::to_path_buf)
