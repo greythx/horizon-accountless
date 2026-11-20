@@ -387,8 +387,12 @@ struct Launcher {
     /// and Java (`start_java`), before it starts.
     starting_client: Option<String>,
     starting_instance: Option<String>,
+    /// A Java instance's files and Java are being downloaded (`start_java`): the status bar
+    /// follows the file count instead of showing "Starting".
+    java_downloading: bool,
     /// Play was pressed on a version not prepared yet: it starts once this preparation ends well.
-    play_when_prepared: Option<(String, String)>,
+    /// The instance is optional — a Horizon build can be played with no instance selected.
+    play_when_prepared: Option<(String, Option<String>)>,
     /// The window's width at the last frame: Home's head lays out by it, as the mockup's `xl`.
     window_width: f32,
     /// The window's longer side in points, and the screen's pixels per point: the size pictures

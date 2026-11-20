@@ -114,7 +114,7 @@ impl Launcher {
             .as_ref()
             .map_or_else(|| backend::game_version(&tag), |j| j.minecraft.clone());
         let left = self.download_left();
-        let steps = self.preparing.then(|| self.steps(left));
+        let steps = (self.preparing || self.java_downloading).then(|| self.steps(left));
 
         // No account verdict in this fork: the game is prepared from the player's own Minecraft
         // install, never from Mojang, so there is no download button and no sign-in prompt here.

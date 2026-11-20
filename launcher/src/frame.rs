@@ -144,6 +144,9 @@ impl Launcher {
         if running {
             return (Tone::Live, tr("Running").into());
         }
+        if self.java_downloading && self.selected_instance().is_some_and(|s| s.id == i.id) {
+            return (Tone::Busy, tr("Downloading").into());
+        }
         let starting = self.starting_client.is_some()
             && self.selected_instance().is_some_and(|s| s.id == i.id);
         if starting {

@@ -267,6 +267,7 @@ impl Launcher {
         self.client_started =
             Some(std::time::SystemTime::now() - std::time::Duration::from_secs(2));
         self.starting_client = Some(instance.id.clone());
+        self.java_downloading = true;
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let log = |line: String| {

@@ -81,17 +81,16 @@ impl Launcher {
     pub(super) fn home_actions(&self, ready: bool, java: bool, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let running = self.client.is_some() || self.starting_client.is_some();
-        if self.preparing {
+        if self.preparing || self.java_downloading {
             // Play waits for the steps below it; a download can stop (the next one goes on from
-            // there).
+            // there). A Java instance's game files download under the same bar as a prepare.
             let download = download_progress();
+            let busy_text = busy_label(self.preparing, self.java_downloading);
             let busy = match download {
-                Some((done, total)) => format!(
-                    "{} {:.0}%",
-                    tr("Getting ready…"),
-                    done as f32 * 100. / total as f32
-                ),
-                None => tr("Getting ready…").to_string(),
+                Some((done, total)) => {
+                    format!("{} {:.0}%", busy_text, done as f32 * 100. / total as f32)
+                }
+                None => busy_text.to_string(),
             };
             return div()
                 .flex()
@@ -138,10 +137,9 @@ impl Launcher {
             PlayPress::PrepareThenPlay => {
                 play = play.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                     this.picker.open = false;
-                    this.play_when_prepared = this
-                        .selected()
-                        .cloned()
-                        .zip(this.selected_instance().map(|i| i.id.clone()));
+                    let tag = this.selected().cloned();
+                    let instance = this.selected_instance().map(|i| i.id.clone());
+                    this.play_when_prepared = tag.map(|tag| (tag, instance));
                     this.prepare();
                     cx.notify();
                 }))
@@ -292,6 +290,16 @@ impl Launcher {
     }
 }
 
+/// What Play says while files are fetched: a Java instance downloads its game, it isn't preparing
+/// a Horizon version. Both strings are translation keys.
+fn busy_label(preparing: bool, java_downloading: bool) -> &'static str {
+    if java_downloading && !preparing {
+        tr("Downloading game files")
+    } else {
+        tr("Getting ready…")
+    }
+}
+
 /// `HORIZON_LAUNCHER_PAGE=getting-ready` opens Home as if Play had been pressed and the game's
 /// Java were a third of the way through its download: for screenshots, nothing runs.
 pub(super) fn getting_ready_preview() -> bool {
@@ -323,6 +331,13 @@ mod tests {
         assert_eq!(time_left(s(4), 100, 600, 3100), None, "too early");
         assert_eq!(time_left(s(10), 600, 600, 3100), None, "nothing done yet");
         assert_eq!(time_left(s(10), 0, 50, 50), Some(s(0)));
+    }
+
+    #[test]
+    fn a_java_download_says_it_is_downloading() {
+        assert_eq!(busy_label(false, true), tr("Downloading game files"));
+        assert_eq!(busy_label(true, false), tr("Getting ready…"));
+        assert_eq!(busy_label(true, true), tr("Getting ready…"));
     }
 
     #[test]
