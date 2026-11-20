@@ -1800,7 +1800,11 @@ fn preparer_binary(dir: &Path) -> Option<PathBuf> {
 /// Downloads the version into Horizon's own game folder, for a player who accepted the
 /// download, and returns the folder: any version Mojang's list names, its version file's
 /// sha1 from that list (as Mojang's own launcher checks them).
-fn download_game_files(version: &str, own: &Path, log: &dyn Fn(String)) -> Result<PathBuf, String> {
+fn download_game_files(
+    version: &str,
+    own: &Path,
+    log: &dyn Fn(String),
+) -> Result<(PathBuf, String), String> {
     if Settings::load().mojang_downloads_allowed_at.is_none() {
         return Err(crate::i18n::tr(
             "The launcher may not download it: allow it in Settings > Storage",
@@ -1814,7 +1818,7 @@ fn download_game_files(version: &str, own: &Path, log: &dyn Fn(String)) -> Resul
     let os = current_os();
     mojang::download(&pins, own, os, 8, &fetch, &mojang::CANCEL, log)?;
     finish_mojang_download(own, &entry.id, log);
-    Ok(own.to_path_buf())
+    Ok((own.to_path_buf(), entry.id.clone()))
 }
 
 /// The closure every Mojang fetch in this file goes through.
@@ -2034,11 +2038,13 @@ pub fn java_game(
         base.join(format!("{}.json", id.display())).is_file()
             && base.join(format!("{}.jar", id.display())).is_file()
     };
-    let minecraft = match &chosen {
-        Some(dir) if present(dir) && dir != &own => dir.clone(),
-        _ if official_complete(&own, &canonical) => own.clone(),
+    let (minecraft, canonical, id) = match &chosen {
+        Some(dir) if present(dir) && dir != &own => (dir.clone(), canonical, id.clone()),
+        _ if official_complete(&own, &canonical) => (own.clone(), canonical, id.clone()),
         _ => match download_game_files(&canonical, &own, log) {
-            Ok(own) => own,
+            // The manifest load here can resolve an alias the first lookup could not: carry its
+            // answer back, so every later path uses the id the files were actually written under.
+            Ok((own, resolved)) => (own, resolved.clone(), mojang::relative(&resolved)?),
             Err(download) => {
                 if let Some(dir) = &chosen {
                     return Err(crate::i18n::trf(
@@ -2104,7 +2110,7 @@ pub fn java_game(
         if !ready.is_file() {
             start = crate::loaders::install(
                 loader,
-                &game.minecraft,
+                &canonical,
                 &minecraft,
                 &runtime.java(),
                 &get_bytes,

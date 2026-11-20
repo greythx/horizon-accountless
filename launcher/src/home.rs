@@ -87,9 +87,16 @@ impl Launcher {
             let download = download_progress();
             let busy_text = busy_label(self.preparing, self.java_downloading);
             let busy = match download {
-                Some((done, total)) => {
-                    format!("{} {:.0}%", busy_text, done as f32 * 100. / total as f32)
-                }
+                Some((done, total)) => trf(
+                    "{status} {percent}",
+                    &[
+                        ("status", busy_text),
+                        (
+                            "percent",
+                            &format!("{:.0}%", done as f32 * 100. / total as f32),
+                        ),
+                    ],
+                ),
                 None => busy_text.to_string(),
             };
             return div()

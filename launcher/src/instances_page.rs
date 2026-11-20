@@ -131,6 +131,14 @@ impl Launcher {
         let Some(id) = self.selected_instance().map(|i| i.id.clone()) else {
             return;
         };
+        // A queued Play belongs to the version the player picked when they pressed it.
+        if self
+            .play_when_prepared
+            .as_ref()
+            .is_some_and(|(queued, _)| Some(queued) != tag.as_ref())
+        {
+            self.play_when_prepared = None;
+        }
         match instances::edit(&id, |m| m.version = tag) {
             Ok(_) => self.reload_instances(),
             Err(e) => self.client_error = Some(e),
@@ -140,6 +148,14 @@ impl Launcher {
     pub(super) fn select_instance(&mut self, instance: &Instance) {
         // A native build's warning names the mods of the instance it was opened for.
         self.pending_consent = None;
+        // A queued Play follows the instance chosen when it was pressed, not a later pick.
+        if self
+            .play_when_prepared
+            .as_ref()
+            .is_some_and(|(_, queued)| queued.as_deref() != Some(instance.id.as_str()))
+        {
+            self.play_when_prepared = None;
+        }
         self.settings.instance =
             (instance.kind != InstanceKind::Default).then(|| instance.id.clone());
         self.save_settings();
