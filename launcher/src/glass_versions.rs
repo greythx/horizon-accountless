@@ -529,8 +529,7 @@ impl Launcher {
                     .tooltip(ui::tip(tip))
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         if follows {
-                            this.settings.selected = Some(t1.clone());
-                            this.save_settings();
+                            this.use_version(t1.clone());
                         } else {
                             this.pin_version(Some(t1.clone()));
                         }

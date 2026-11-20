@@ -1,6 +1,7 @@
 //! Instances in the window (`horizon_launcher::instances`): the sidebar's list, by group, and the
 //! dialog that makes one (empty, or a copy of the selected one) or changes its name, group and
 //! icon.
+use super::launcher_play::queue_stale;
 use super::*;
 use gpui::RenderImage;
 use horizon_launcher::instances::{self, Icon, Instance, Kind as InstanceKind};
@@ -131,16 +132,12 @@ impl Launcher {
         let Some(id) = self.selected_instance().map(|i| i.id.clone()) else {
             return;
         };
-        // A queued Play belongs to the version the player picked when they pressed it.
-        if self
-            .play_when_prepared
-            .as_ref()
-            .is_some_and(|(queued, _)| Some(queued) != tag.as_ref())
-        {
-            self.play_when_prepared = None;
-        }
         match instances::edit(&id, |m| m.version = tag) {
-            Ok(_) => self.reload_instances(),
+            Ok(_) => {
+                self.reload_instances();
+                // None means "Latest": compare the version that actually plays, not the pin.
+                self.drop_stale_queue();
+            }
             Err(e) => self.client_error = Some(e),
         }
     }
@@ -148,17 +145,20 @@ impl Launcher {
     pub(super) fn select_instance(&mut self, instance: &Instance) {
         // A native build's warning names the mods of the instance it was opened for.
         self.pending_consent = None;
-        // A queued Play follows the instance chosen when it was pressed, not a later pick.
-        if self
-            .play_when_prepared
-            .as_ref()
-            .is_some_and(|(_, queued)| queued.as_deref() != Some(instance.id.as_str()))
-        {
-            self.play_when_prepared = None;
-        }
         self.settings.instance =
             (instance.kind != InstanceKind::Default).then(|| instance.id.clone());
         self.save_settings();
+        // A queued Play follows the instance and version chosen when it was pressed. The save
+        // path passes the freshly edited instance, so read its version from the argument.
+        let effective = self
+            .version_of(instance)
+            .cloned()
+            .or_else(|| self.launcher_version().cloned());
+        if self.play_when_prepared.as_ref().is_some_and(|queued| {
+            queue_stale(queued, effective.as_ref(), Some(instance.id.as_str()))
+        }) {
+            self.play_when_prepared = None;
+        }
     }
 
     /// A texture from the selected version's prepared files, its first frame, drawn as pixels.
