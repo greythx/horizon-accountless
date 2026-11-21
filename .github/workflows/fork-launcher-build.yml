@@ -6,8 +6,8 @@ name: fork launcher build
 # Push to main: one optimized Windows release launcher, uploaded as an artifact.
 # Manual (Actions -> Run workflow): choose release, dev/debug, fast, or native-mod dev.
 #
-#   gh workflow run fork-launcher-build -f build_type=release
-#   gh run list --workflow fork-launcher-build
+#   gh workflow run fork-launcher-build.yml -f build_type=release
+#   gh run list --workflow fork-launcher-build.yml
 
 on:
   push:
@@ -67,7 +67,7 @@ jobs:
               # The game's quick-link optimized profile (root workspace), not a launcher profile.
               echo "manifest=Cargo.toml" >> "$GITHUB_OUTPUT"
               echo "profile=fast" >> "$GITHUB_OUTPUT"
-              echo "package=-p horizon-client" >> "$GITHUB_OUTPUT"
+              echo "package=-p horizon-game" >> "$GITHUB_OUTPUT"
               echo "binary=target/fast/horizon-client.exe" >> "$GITHUB_OUTPUT"
               echo "cache=." >> "$GITHUB_OUTPUT"
               ;;
@@ -75,7 +75,7 @@ jobs:
               # Unoptimized game for native-mod work: rebuilds ~6x faster, game runs ~2x slower.
               echo "manifest=Cargo.toml" >> "$GITHUB_OUTPUT"
               echo "profile=dev" >> "$GITHUB_OUTPUT"
-              echo "package=-p horizon-client" >> "$GITHUB_OUTPUT"
+              echo "package=-p horizon-game" >> "$GITHUB_OUTPUT"
               echo "binary=target/debug/horizon-client.exe" >> "$GITHUB_OUTPUT"
               echo "cache=." >> "$GITHUB_OUTPUT"
               ;;
