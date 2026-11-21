@@ -173,6 +173,7 @@ impl Launcher {
             toast_seen: None,
             starting_client: None,
             starting_instance: None,
+            java_downloading: false,
             play_when_prepared: None,
 
             window_width: 0.,
@@ -258,10 +259,9 @@ impl Launcher {
         this.mods_auto_update();
         if home::getting_ready_preview() {
             this.preparing = true;
-            this.play_when_prepared = this
-                .selected()
-                .cloned()
-                .zip(this.selected_instance().map(|i| i.id.clone()));
+            let tag = this.selected().cloned();
+            let instance = this.selected_instance().map(|i| i.id.clone());
+            this.play_when_prepared = tag.map(|tag| (tag, instance));
         }
         // `HORIZON_LAUNCHER_PAGE=new-instance`: the dialog open on Modded, for screenshots
         // (`new-instance-horizon`, `new-instance-vanilla`: on those).

@@ -385,6 +385,12 @@ impl Launcher {
                     tr("Preparing").into(),
                     horizon_launcher::mojang::progress().map(|(d, n)| d as f32 / n.max(1) as f32),
                 )),
+                // A Java instance's game files are being fetched: the bar follows the file
+                // count, not an indeterminate "Starting" spinner.
+                (false, _) if self.java_downloading => Some((
+                    tr("Downloading game files").into(),
+                    horizon_launcher::mojang::progress().map(|(d, n)| d as f32 / n.max(1) as f32),
+                )),
                 (_, Some(_)) => Some((tr("Starting").into(), None)),
                 // This instance's mods building (Build and play): the build's overall progress,
                 // the same figure as its card.
@@ -588,10 +594,9 @@ impl Launcher {
                     PlayPress::PrepareThenPlay => {
                         main.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                             this.picker.open = false;
-                            this.play_when_prepared = this
-                                .selected()
-                                .cloned()
-                                .zip(this.selected_instance().map(|i| i.id.clone()));
+                            let tag = this.selected().cloned();
+                            let instance = this.selected_instance().map(|i| i.id.clone());
+                            this.play_when_prepared = tag.map(|tag| (tag, instance));
                             this.prepare();
                             cx.notify();
                         }))

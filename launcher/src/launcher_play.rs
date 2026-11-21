@@ -40,6 +40,27 @@ impl Launcher {
             .filter(|s| self.installed.contains(s))
     }
 
+    /// A queued Play belongs to the version and instance picked when it was pressed. After a
+    /// selection changed, drop it only if what Play would start actually changed.
+    pub(crate) fn drop_stale_queue(&mut self) {
+        let effective = self.selected().cloned();
+        let selected = self.selected_instance().map(|i| i.id.as_str());
+        if self
+            .play_when_prepared
+            .as_ref()
+            .is_some_and(|queued| queue_stale(queued, effective.as_ref(), selected))
+        {
+            self.play_when_prepared = None;
+        }
+    }
+
+    /// The Versions page's Use, for instances that follow the launcher's version.
+    pub(crate) fn use_version(&mut self, tag: String) {
+        self.settings.selected = Some(tag);
+        self.save_settings();
+        self.drop_stale_queue();
+    }
+
     /// Installs `release` for an instance made or edited to play it, after the install running
     /// now if there is one.
     pub(crate) fn install_for_instance(&mut self, release: Release) {
@@ -267,6 +288,7 @@ impl Launcher {
         self.client_started =
             Some(std::time::SystemTime::now() - std::time::Duration::from_secs(2));
         self.starting_client = Some(instance.id.clone());
+        self.java_downloading = true;
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let log = |line: String| {
@@ -366,5 +388,37 @@ impl Launcher {
             }
         })
         .detach();
+    }
+}
+
+/// A queued Play belongs to the version and instance picked when it was pressed. A later
+/// selection only cancels it if what Play would start actually changed.
+pub(super) fn queue_stale(
+    queued: &(String, Option<String>),
+    effective: Option<&String>,
+    selected: Option<&str>,
+) -> bool {
+    Some(&queued.0) != effective || queued.1.as_deref() != selected
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_queue_stays_only_for_the_same_version_and_instance() {
+        let version = "26.3".to_string();
+        let queued = ("26.3".to_string(), Some("horizon".to_string()));
+        assert!(!queue_stale(&queued, Some(&version), Some("horizon")));
+        assert!(queue_stale(
+            &queued,
+            Some(&"26.2".to_string()),
+            Some("horizon")
+        ));
+        assert!(queue_stale(&queued, Some(&version), Some("other")));
+        assert!(queue_stale(&queued, Some(&version), None));
+        // A build played with no selected instance stays queued while none is selected.
+        let alone = ("26.3".to_string(), None);
+        assert!(!queue_stale(&alone, Some(&version), None));
     }
 }

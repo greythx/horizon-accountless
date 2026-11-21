@@ -1800,7 +1800,11 @@ fn preparer_binary(dir: &Path) -> Option<PathBuf> {
 /// Downloads the version into Horizon's own game folder, for a player who accepted the
 /// download, and returns the folder: any version Mojang's list names, its version file's
 /// sha1 from that list (as Mojang's own launcher checks them).
-fn download_game_files(version: &str, own: &Path, log: &dyn Fn(String)) -> Result<PathBuf, String> {
+fn download_game_files(
+    version: &str,
+    own: &Path,
+    log: &dyn Fn(String),
+) -> Result<(PathBuf, String), String> {
     if Settings::load().mojang_downloads_allowed_at.is_none() {
         return Err(crate::i18n::tr(
             "The launcher may not download it: allow it in Settings > Storage",
@@ -1813,14 +1817,8 @@ fn download_game_files(version: &str, own: &Path, log: &dyn Fn(String)) -> Resul
     let fetch = fetch_fetch();
     let os = current_os();
     mojang::download(&pins, own, os, 8, &fetch, &mojang::CANCEL, log)?;
-    let marker = downloaded_marker(own, &entry.id);
-    if let Err(e) = fs::write(&marker, b"") {
-        log(crate::i18n::trf(
-            "Horizon could not write the completion record for {version}: {error}",
-            &[("version", &entry.id), ("error", &e.to_string())],
-        ));
-    }
-    Ok(own.to_path_buf())
+    finish_mojang_download(own, &entry.id, log);
+    Ok((own.to_path_buf(), entry.id.clone()))
 }
 
 /// The closure every Mojang fetch in this file goes through.
@@ -1882,6 +1880,18 @@ pub(crate) fn downloaded_marker(dir: &Path, version: &str) -> PathBuf {
     dir.join("versions")
         .join(version)
         .join(format!("{version}.horizon-downloaded"))
+}
+
+/// Writes the completion record after a Mojang download finished whole. Both download paths
+/// call this: without it every "is it installed?" check rejects files that are really there,
+/// even though the download put every one of them on disk.
+fn finish_mojang_download(dir: &Path, version: &str, log: &dyn Fn(String)) {
+    if let Err(e) = fs::write(downloaded_marker(dir, version), b"") {
+        log(crate::i18n::trf(
+            "Horizon could not write the completion record for {version}: {error}",
+            &[("version", version), ("error", &e.to_string())],
+        ));
+    }
 }
 
 /// The launcher prepares this version: its files can come from its own verified imports,
@@ -2011,17 +2021,30 @@ pub fn java_game(
         .clone()
         .or_else(default_minecraft_dir);
     let own = data_dir().join("minecraft");
-    let id = mojang::relative(&game.minecraft)?;
+    // Resolve an alias ("latest", "release", "snapshot") once: the download writes its files and
+    // completion record under the real id, so every later path must use that same id.
+    let canonical = crate::minecraft_versions::load()
+        .ok()
+        .and_then(|listed| {
+            listed
+                .find(&game.minecraft)
+                .ok()
+                .map(|entry| entry.id.clone())
+        })
+        .unwrap_or_else(|| game.minecraft.clone());
+    let id = mojang::relative(&canonical)?;
     let present = |dir: &Path| {
         let base = dir.join("versions").join(&id);
         base.join(format!("{}.json", id.display())).is_file()
             && base.join(format!("{}.jar", id.display())).is_file()
     };
-    let minecraft = match &chosen {
-        Some(dir) if present(dir) && dir != &own => dir.clone(),
-        _ if official_complete(&own, &game.minecraft) => own.clone(),
-        _ => match download_game_files(&game.minecraft, &own, log) {
-            Ok(own) => own,
+    let (minecraft, canonical, id) = match &chosen {
+        Some(dir) if present(dir) && dir != &own => (dir.clone(), canonical, id.clone()),
+        _ if official_complete(&own, &canonical) => (own.clone(), canonical, id.clone()),
+        _ => match download_game_files(&canonical, &own, log) {
+            // The manifest load here can resolve an alias the first lookup could not: carry its
+            // answer back, so every later path uses the id the files were actually written under.
+            Ok((own, resolved)) => (own, resolved.clone(), mojang::relative(&resolved)?),
             Err(download) => {
                 if let Some(dir) = &chosen {
                     return Err(crate::i18n::trf(
@@ -2065,7 +2088,7 @@ pub fn java_game(
             .join(mojang::relative(id)?)
             .join(format!("{id}.json")))
     };
-    let vanilla = crate::java_launch::read(&file(&game.minecraft)?)?;
+    let vanilla = crate::java_launch::read(&file(&canonical)?)?;
     let need = crate::java::Need::of(&crate::java_launch::resolve(vanilla, &minecraft)?);
     let found = crate::java::pick(
         &need,
@@ -2080,14 +2103,14 @@ pub fn java_game(
             crate::java::install(&need, log)?
         }
     };
-    let mut start = game.minecraft.clone();
+    let mut start = canonical.clone();
     if let Some(loader) = &game.loader {
-        start = loader.kind.profile_id(&loader.version, &game.minecraft);
+        start = loader.kind.profile_id(&loader.version, &canonical);
         let ready = marker(&start)?;
         if !ready.is_file() {
             start = crate::loaders::install(
                 loader,
-                &game.minecraft,
+                &canonical,
                 &minecraft,
                 &runtime.java(),
                 &get_bytes,
@@ -2334,6 +2357,7 @@ pub fn preparer(
                             )
                         },
                     )?;
+                    finish_mojang_download(&own, &version, log);
                     own
                 }
             }
@@ -5574,6 +5598,22 @@ mod tests {
         flag.store(false, Ordering::Relaxed);
         reset_download_cancel(false, &flag);
         assert!(!flag.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn a_finished_download_is_recognised_as_installed() {
+        let own = prepare_test_dir("download-marker");
+        let versions = own.join("versions/26.2");
+        fs::create_dir_all(&versions).unwrap();
+        fs::write(versions.join("26.2.json"), b"{}").unwrap();
+        fs::write(versions.join("26.2.jar"), b"j").unwrap();
+        assert!(!java_files_present_in("26.2", None, &own));
+        let lines = std::cell::RefCell::new(Vec::new());
+        finish_mojang_download(&own, "26.2", &|line| lines.borrow_mut().push(line));
+        // The marker written after the last file is what lets the launch proceed.
+        assert!(java_files_present_in("26.2", None, &own));
+        assert!(lines.borrow().is_empty(), "a normal write logs nothing");
+        fs::remove_dir_all(own).unwrap();
     }
 
     fn prepare_test_dir(name: &str) -> PathBuf {

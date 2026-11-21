@@ -36,6 +36,7 @@ impl Launcher {
                 Msg::Playing(playing) => self.playing = playing,
                 Msg::JavaGame(id, home, cmd) => {
                     self.starting_client = None;
+                    self.java_downloading = false;
                     let spawned = cmd.and_then(|(cmd, vars)| {
                         self.client_vars = vars;
                         backend::spawn(Job::Client, cmd, self.tx.clone())
@@ -273,11 +274,24 @@ impl Launcher {
                             self.preparing = false;
                             // Play pressed before the version was prepared plays now. While the
                             // preparation waits for the download consent, the queued launch stays.
+                            let mut queued_error = None;
                             if !waiting_for_consent {
-                                if let Some((tag, instance)) = self.play_when_prepared.take() {
+                                if let Some((tag, instance)) = self.play_when_prepared.clone() {
                                     if error.is_none() && backend::check_prepared(&tag) {
+                                        self.play_when_prepared = None;
                                         self.starting_pack = None;
-                                        self.start_client(tag, Some(instance));
+                                        self.start_client(tag, instance);
+                                    } else {
+                                        // The files were not prepared after all: keep the queued
+                                        // Play and say why instead of dropping it silently.
+                                        queued_error = error.clone().or_else(|| {
+                                            Some(
+                                                crate::i18n::tr(
+                                                    "The version is still not prepared. Prepare it again, then play.",
+                                                )
+                                                .to_string(),
+                                            )
+                                        });
                                     }
                                 }
                             }
@@ -286,7 +300,7 @@ impl Launcher {
                             }
                             // A preparer process's exit status says little, so its last line
                             // follows; the launcher's own errors are full sentences already.
-                            self.prepare_error = error.map(|e| {
+                            self.prepare_error = error.or(queued_error).map(|e| {
                                 let tail = self
                                     .prepare_log
                                     .iter()

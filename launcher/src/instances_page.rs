@@ -1,6 +1,7 @@
 //! Instances in the window (`horizon_launcher::instances`): the sidebar's list, by group, and the
 //! dialog that makes one (empty, or a copy of the selected one) or changes its name, group and
 //! icon.
+use super::launcher_play::queue_stale;
 use super::*;
 use gpui::RenderImage;
 use horizon_launcher::instances::{self, Icon, Instance, Kind as InstanceKind};
@@ -132,7 +133,11 @@ impl Launcher {
             return;
         };
         match instances::edit(&id, |m| m.version = tag) {
-            Ok(_) => self.reload_instances(),
+            Ok(_) => {
+                self.reload_instances();
+                // None means "Latest": compare the version that actually plays, not the pin.
+                self.drop_stale_queue();
+            }
             Err(e) => self.client_error = Some(e),
         }
     }
@@ -143,6 +148,17 @@ impl Launcher {
         self.settings.instance =
             (instance.kind != InstanceKind::Default).then(|| instance.id.clone());
         self.save_settings();
+        // A queued Play follows the instance and version chosen when it was pressed. The save
+        // path passes the freshly edited instance, so read its version from the argument.
+        let effective = self
+            .version_of(instance)
+            .cloned()
+            .or_else(|| self.launcher_version().cloned());
+        if self.play_when_prepared.as_ref().is_some_and(|queued| {
+            queue_stale(queued, effective.as_ref(), Some(instance.id.as_str()))
+        }) {
+            self.play_when_prepared = None;
+        }
     }
 
     /// A texture from the selected version's prepared files, its first frame, drawn as pixels.
