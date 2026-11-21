@@ -1884,9 +1884,22 @@ pub(crate) fn downloaded_marker(dir: &Path, version: &str) -> PathBuf {
 
 /// Writes the completion record after a Mojang download finished whole. Both download paths
 /// call this: without it every "is it installed?" check rejects files that are really there,
-/// even though the download put every one of them on disk.
+/// even though the download put every one of them on disk. The game also needs a lease on the
+/// new folder chain; upstream installs publish theirs when they land, and this is that step
+/// for files fetched straight from Mojang into `data/minecraft`.
 fn finish_mojang_download(dir: &Path, version: &str, log: &dyn Fn(String)) {
-    if let Err(e) = fs::write(downloaded_marker(dir, version), b"") {
+    // Publish before writing the completion record: a failed publication must leave the version
+    // unmarked, so the next "is it installed?" check downloads again and publishes again. With
+    // the marker first, a failed publish would be permanent. Startup also backfills older files.
+    if let Err(e) = crate::run_leases::publish(&dir.join("versions").join(version)) {
+        log(crate::i18n::trf(
+            "Horizon could not register the downloaded files for {version}: {error}",
+            &[
+                ("version", version),
+                ("error", &crate::native_mods::cache_error(e)),
+            ],
+        ));
+    } else if let Err(e) = fs::write(downloaded_marker(dir, version), b"") {
         log(crate::i18n::trf(
             "Horizon could not write the completion record for {version}: {error}",
             &[("version", version), ("error", &e.to_string())],
@@ -5614,6 +5627,47 @@ mod tests {
         assert!(java_files_present_in("26.2", None, &own));
         assert!(lines.borrow().is_empty(), "a normal write logs nothing");
         fs::remove_dir_all(own).unwrap();
+    }
+
+    #[test]
+    fn a_downloaded_version_is_registered_for_leases() {
+        const ENV: &str = "HORIZON_TEST_MOJANG_LEASES";
+        if let Some(root) = std::env::var_os(ENV) {
+            let data = PathBuf::from(root).join("data");
+            let own = data.join("minecraft");
+            fs::create_dir_all(own.join("versions/26.2")).unwrap();
+            let lines = std::cell::RefCell::new(Vec::new());
+            finish_mojang_download(&own, "26.2", &|line| lines.borrow_mut().push(line));
+            assert!(
+                lines.borrow().is_empty(),
+                "publish failed: {:?}",
+                lines.borrow()
+            );
+            let registry =
+                horizon_platform::mod_package::runtime_leases::Registry::existing(&data).unwrap();
+            for path in [own.join("versions/26.2"), own.join("versions"), own.clone()] {
+                let dir = cap_std::fs::Dir::open_ambient_dir(&path, cap_std::ambient_authority())
+                    .unwrap();
+                registry
+                    .lock(&dir, crate::native_cache::LockMode::Shared)
+                    .unwrap_or_else(|e| panic!("{} is not leased: {e:?}", path.display()));
+            }
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        assert!(std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "backend::tests::a_downloaded_version_is_registered_for_leases"
+            ])
+            .env(ENV, root.path())
+            .env("HORIZON_LAUNCHER_HOME", root.path().join("data"))
+            .env("HORIZON_HOME", root.path().join("game"))
+            .env("HORIZON_LAUNCHER_NO_SELF_UPDATE", "1")
+            .env("HORIZON_NO_AUDIO", "1")
+            .status()
+            .unwrap()
+            .success());
     }
 
     fn prepare_test_dir(name: &str) -> PathBuf {

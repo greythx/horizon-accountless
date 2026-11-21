@@ -63,6 +63,10 @@ fn run_launcher() {
     let _location_error = horizon_launcher::data_location::startup();
     perf::process_started();
     backend::exe_path();
+    // Register cache trees from earlier runs, including Mojang downloads that predate their
+    // own publication. Upstream placed its startup cleanup here; this fork needs the lease
+    // backfill in the same spot.
+    backend::startup_cleanup();
     // What the launcher downloads goes through the player's proxy, if they set one: the parts
     // that build their own agents (`horizon-port-pack`) are told before anything starts.
     horizon_launcher::proxy::announce(horizon_launcher::backend::Settings::load().proxy);

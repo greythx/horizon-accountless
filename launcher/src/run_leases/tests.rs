@@ -363,3 +363,34 @@ fn data_directory_leaf_never_leases_ancestors_outside_data() {
         .unwrap()
         .success());
 }
+
+#[test]
+fn publish_existing_backfills_previously_downloaded_versions() {
+    const ENV: &str = "HORIZON_TEST_LEASE_BACKFILL";
+    if let Some(root) = std::env::var_os(ENV) {
+        let data = std::path::PathBuf::from(root).join("data");
+        let version = data.join("minecraft/versions/26.2");
+        fs::create_dir_all(&version).unwrap();
+        publish_existing().unwrap();
+        let registry =
+            horizon_platform::mod_package::runtime_leases::Registry::existing(&data).unwrap();
+        registry
+            .lock(&directory(&version), LockMode::Shared)
+            .unwrap_or_else(|e| panic!("an older download is still unleased: {e:?}"));
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    assert!(Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "run_leases::tests::publish_existing_backfills_previously_downloaded_versions"
+        ])
+        .env(ENV, root.path())
+        .env("HORIZON_LAUNCHER_HOME", root.path().join("data"))
+        .env("HORIZON_HOME", root.path().join("game"))
+        .env("HORIZON_LAUNCHER_NO_SELF_UPDATE", "1")
+        .env("HORIZON_NO_AUDIO", "1")
+        .status()
+        .unwrap()
+        .success());
+}
