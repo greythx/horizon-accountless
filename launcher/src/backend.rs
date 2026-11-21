@@ -1882,6 +1882,25 @@ pub(crate) fn downloaded_marker(dir: &Path, version: &str) -> PathBuf {
         .join(format!("{version}.horizon-downloaded"))
 }
 
+/// Register the downloaded files with the lease registry. Returns whether the lease is in
+/// place; it says nothing about whether the whole download finished, so callers that found an
+/// interrupted folder must not infer a completion record from this.
+fn publish_download(dir: &Path, version: &str, log: &dyn Fn(String)) -> bool {
+    match crate::run_leases::publish(&dir.join("versions").join(version)) {
+        Ok(()) => true,
+        Err(e) => {
+            log(crate::i18n::trf(
+                "Horizon could not register the downloaded files for {version}: {error}",
+                &[
+                    ("version", version),
+                    ("error", &crate::native_mods::cache_error(e)),
+                ],
+            ));
+            false
+        }
+    }
+}
+
 /// Writes the completion record after a Mojang download finished whole. Both download paths
 /// call this: without it every "is it installed?" check rejects files that are really there,
 /// even though the download put every one of them on disk. The game also needs a lease on the
@@ -1891,19 +1910,13 @@ fn finish_mojang_download(dir: &Path, version: &str, log: &dyn Fn(String)) {
     // Publish before writing the completion record: a failed publication must leave the version
     // unmarked, so the next "is it installed?" check downloads again and publishes again. With
     // the marker first, a failed publish would be permanent. Startup also backfills older files.
-    if let Err(e) = crate::run_leases::publish(&dir.join("versions").join(version)) {
-        log(crate::i18n::trf(
-            "Horizon could not register the downloaded files for {version}: {error}",
-            &[
-                ("version", version),
-                ("error", &crate::native_mods::cache_error(e)),
-            ],
-        ));
-    } else if let Err(e) = fs::write(downloaded_marker(dir, version), b"") {
-        log(crate::i18n::trf(
-            "Horizon could not write the completion record for {version}: {error}",
-            &[("version", version), ("error", &e.to_string())],
-        ));
+    if publish_download(dir, version, log) {
+        if let Err(e) = fs::write(downloaded_marker(dir, version), b"") {
+            log(crate::i18n::trf(
+                "Horizon could not write the completion record for {version}: {error}",
+                &[("version", version), ("error", &e.to_string())],
+            ));
+        }
     }
 }
 
@@ -2341,10 +2354,11 @@ pub fn preparer(
             match resolved? {
                 sources::Resolved::Folder(dir) => {
                     // A pinned jar and json in our own folder can be there from a download whose
-                    // publish failed: `sources::find` does not look at the marker, so retry it
-                    // here instead of leaving the version unleased for this whole session.
+                    // publish failed, or from one that stopped before its libraries arrived.
+                    // Retry the lease, but never write the completion record here: only a whole
+                    // download, which `finish_mojang_download` sees, may mark the version ready.
                     if dir == own && !downloaded_marker(&own, &version).is_file() {
-                        finish_mojang_download(&own, &version, log);
+                        publish_download(&own, &version, log);
                     }
                     dir
                 }
@@ -5645,7 +5659,14 @@ mod tests {
             let own = data.join("minecraft");
             fs::create_dir_all(own.join("versions/26.2")).unwrap();
             let lines = std::cell::RefCell::new(Vec::new());
+            // Reusing a folder registers it but must not claim a whole download happened: the
+            // jar and json can be there from an interrupted one.
+            assert!(publish_download(&own, "26.2", &|line| {
+                lines.borrow_mut().push(line)
+            }));
+            assert!(!downloaded_marker(&own, "26.2").is_file());
             finish_mojang_download(&own, "26.2", &|line| lines.borrow_mut().push(line));
+            assert!(downloaded_marker(&own, "26.2").is_file());
             assert!(
                 lines.borrow().is_empty(),
                 "publish failed: {:?}",
