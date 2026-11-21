@@ -128,6 +128,11 @@ fn stage(source: &Path, slot: &Path) -> io::Result<Guard> {
         slot.join("source.json"),
         serde_json::to_vec(&fs::canonicalize(source)?)?,
     )?;
+    // The game runs from this copied folder, not from the installed version. Its standalone
+    // lease check needs the whole chain (game, slot, run) registered before it starts.
+    // Startup backfill only covers slots that already existed, so publish the new one here.
+    crate::run_leases::publish(&game)
+        .map_err(|e| io::Error::other(crate::native_mods::cache_error(e)))?;
     Ok(Guard {
         _slot: lock,
         _source: source_file,
@@ -195,6 +200,7 @@ fn in_use_in(source: &Path, root: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn a_program_running_from_the_version_folder_keeps_it_in_use() {
@@ -225,6 +231,44 @@ mod tests {
         assert!(running && protected);
         assert!(!in_use_in(&version, &slots));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn staging_a_slot_registers_its_lease_chain() {
+        const ENV: &str = "HORIZON_TEST_SLOT_LEASES";
+        if let Some(root) = std::env::var_os(ENV) {
+            let data = PathBuf::from(root).join("data");
+            let source = data.join("versions/v1");
+            fs::create_dir_all(&source).unwrap();
+            fs::write(source.join(crate::backend::CLIENT), b"game").unwrap();
+            let slot = data.join("run").join("a".repeat(64));
+            let guard = stage(&source, &slot).unwrap();
+            let registry =
+                horizon_platform::mod_package::runtime_leases::Registry::existing(&data).unwrap();
+            for path in [slot.join("game"), slot.clone(), data.join("run")] {
+                let dir = cap_std::fs::Dir::open_ambient_dir(&path, cap_std::ambient_authority())
+                    .unwrap();
+                registry
+                    .lock(&dir, crate::native_cache::LockMode::Shared)
+                    .unwrap_or_else(|e| panic!("{} is not leased: {e:?}", path.display()));
+            }
+            drop(guard);
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        assert!(std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "windows_runtime::tests::staging_a_slot_registers_its_lease_chain"
+            ])
+            .env(ENV, root.path())
+            .env("HORIZON_LAUNCHER_HOME", root.path().join("data"))
+            .env("HORIZON_HOME", root.path().join("game"))
+            .env("HORIZON_LAUNCHER_NO_SELF_UPDATE", "1")
+            .env("HORIZON_NO_AUDIO", "1")
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]

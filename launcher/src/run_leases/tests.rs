@@ -394,3 +394,45 @@ fn publish_existing_backfills_previously_downloaded_versions() {
         .unwrap()
         .success());
 }
+
+#[test]
+fn java_instance_command_does_not_block_launch() {
+    const ENV: &str = "HORIZON_TEST_JAVA_LEASES";
+    if let Some(root) = std::env::var_os(ENV) {
+        let root = std::path::PathBuf::from(&root);
+        let home = root.join("game");
+        std::fs::create_dir_all(&home).unwrap();
+        // A Java instance's command: javaw plus JVM switches, ending in a --versionType value.
+        // The game-argument grammar used for native leases cannot parse it; that must not stop
+        // the launch.
+        let words = vec![
+            std::ffi::OsString::from("javaw.exe"),
+            std::ffi::OsString::from("--enable-native-access=ALL-UNNAMED"),
+            std::ffi::OsString::from("--add-exports"),
+            std::ffi::OsString::from("java.base/jdk.internal.misc=ALL-UNNAMED"),
+            std::ffi::OsString::from("net.minecraft.client.main.Main"),
+            std::ffi::OsString::from("--versionType"),
+            std::ffi::OsString::from("release"),
+        ];
+        let mut cmd = std::process::Command::new("javaw.exe");
+        cmd.current_dir(&home)
+            .env("HORIZON_HOME", &home)
+            .env(GAME, serde_json::to_string(&words).unwrap());
+        shared(&cmd).expect("a Java command must not block the launch");
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    assert!(Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "run_leases::tests::java_instance_command_does_not_block_launch"
+        ])
+        .env(ENV, root.path())
+        .env("HORIZON_LAUNCHER_HOME", root.path().join("data"))
+        .env("HORIZON_HOME", root.path().join("game"))
+        .env("HORIZON_LAUNCHER_NO_SELF_UPDATE", "1")
+        .env("HORIZON_NO_AUDIO", "1")
+        .status()
+        .unwrap()
+        .success());
+}
