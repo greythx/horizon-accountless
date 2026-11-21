@@ -466,10 +466,15 @@ pub(crate) fn publish_existing() -> Result<(), Error> {
     if !data.try_exists()? {
         return Ok(());
     }
-    let mut units = vec![crate::backend::build_dir().join("native/target")];
+    let mut units = vec![
+        crate::backend::build_dir().join("native/target"),
+        // Files fetched from Mojang land here, outside the upstream-installed trees below.
+        data.join("minecraft"),
+    ];
     for collection in [
         data.join("versions"),
         data.join("instances"),
+        data.join("minecraft").join("versions"),
         crate::backend::build_dir().join("native/server-builds"),
     ] {
         match fs::read_dir(collection) {
