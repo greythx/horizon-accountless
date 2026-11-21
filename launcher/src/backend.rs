@@ -2339,7 +2339,15 @@ pub fn preparer(
             assets_folder(resolved, &chosen, &version, log)
         } else {
             match resolved? {
-                sources::Resolved::Folder(dir) => dir,
+                sources::Resolved::Folder(dir) => {
+                    // A pinned jar and json in our own folder can be there from a download whose
+                    // publish failed: `sources::find` does not look at the marker, so retry it
+                    // here instead of leaving the version unleased for this whole session.
+                    if dir == own && !downloaded_marker(&own, &version).is_file() {
+                        finish_mojang_download(&own, &version, log);
+                    }
+                    dir
+                }
                 sources::Resolved::NotFound(checked) => {
                     // Straight from Mojang (what is already there and whole is kept),
                     // when the player accepted the download.
