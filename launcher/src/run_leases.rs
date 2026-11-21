@@ -76,16 +76,22 @@ pub(crate) fn shared(command: &Command) -> Result<Vec<Claim>, Error> {
                 }
             }
         }
-        let selection =
-            horizon_platform::mod_package::selection::LaunchArguments::for_command(&game)?;
-        paths.push(selection.context.game_dir);
-        paths.push(selection.context.home);
-        let cwd = command.get_current_dir().unwrap_or(Path::new("."));
-        for argument in selection.rest {
-            if let horizon_platform::mod_package::selection::Argument::Value(name, value) = argument
-            {
-                if name == "--resources" {
-                    paths.push(cwd.join(value));
+        // A Java instance's command is `javaw` with JVM switches, not the Horizon client's
+        // grammar: parsing it fails (and it uses no native leases). Skip those paths instead
+        // of refusing to launch. Horizon commands still contribute their game paths.
+        if let Ok(selection) =
+            horizon_platform::mod_package::selection::LaunchArguments::for_command(&game)
+        {
+            paths.push(selection.context.game_dir);
+            paths.push(selection.context.home);
+            let cwd = command.get_current_dir().unwrap_or(Path::new("."));
+            for argument in selection.rest {
+                if let horizon_platform::mod_package::selection::Argument::Value(name, value) =
+                    argument
+                {
+                    if name == "--resources" {
+                        paths.push(cwd.join(value));
+                    }
                 }
             }
         }
@@ -475,6 +481,8 @@ pub(crate) fn publish_existing() -> Result<(), Error> {
         data.join("versions"),
         data.join("instances"),
         data.join("minecraft").join("versions"),
+        // Windows runs the game from a copy under data/run; its lease chain must exist too.
+        data.join("run"),
         crate::backend::build_dir().join("native/server-builds"),
     ] {
         match fs::read_dir(collection) {
@@ -492,6 +500,8 @@ pub(crate) fn publish_existing() -> Result<(), Error> {
                             "cache",
                             "logs",
                             "crash-reports",
+                            // The game executable lives in a runtime slot's game folder.
+                            "game",
                         ] {
                             units.push(path.join(relative));
                         }
