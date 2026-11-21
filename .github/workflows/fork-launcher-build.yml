@@ -1,0 +1,110 @@
+name: fork launcher build
+
+# Fork-only build workflow. Upstream's launcher.yml ends in signing and a GitHub release this
+# fork cannot publish (no release environment/key), so it is disabled here.
+#
+# Push to main: one optimized Windows release launcher, uploaded as an artifact.
+# Manual (Actions -> Run workflow): choose release, dev/debug, fast, or native-mod dev.
+#
+#   gh workflow run fork-launcher-build.yml -f build_type=release
+#   gh run list --workflow fork-launcher-build.yml
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: What to build (push to main always builds the release launcher)
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - dev-debug
+          - fast
+          - native-mod-dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-launcher-build
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    if: github.repository == 'greythx/horizon-accountless'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+          persist-credentials: false
+
+      - name: Select what to build
+        id: select
+        shell: bash
+        run: |
+          kind="${{ github.event_name == 'push' && 'release' || inputs.build_type }}"
+          case "$kind" in
+            release)
+              echo "manifest=launcher/Cargo.toml" >> "$GITHUB_OUTPUT"
+              echo "profile=release" >> "$GITHUB_OUTPUT"
+              echo "package=" >> "$GITHUB_OUTPUT"
+              echo "binary=launcher/target/release/horizon-launcher.exe" >> "$GITHUB_OUTPUT"
+              echo "cache=launcher" >> "$GITHUB_OUTPUT"
+              ;;
+            dev-debug)
+              echo "manifest=launcher/Cargo.toml" >> "$GITHUB_OUTPUT"
+              echo "profile=dev" >> "$GITHUB_OUTPUT"
+              echo "package=" >> "$GITHUB_OUTPUT"
+              echo "binary=launcher/target/debug/horizon-launcher.exe" >> "$GITHUB_OUTPUT"
+              echo "cache=launcher" >> "$GITHUB_OUTPUT"
+              ;;
+            fast)
+              # The game's quick-link optimized profile (root workspace), not a launcher profile.
+              echo "manifest=Cargo.toml" >> "$GITHUB_OUTPUT"
+              echo "profile=fast" >> "$GITHUB_OUTPUT"
+              echo "package=-p horizon-game" >> "$GITHUB_OUTPUT"
+              echo "binary=target/fast/horizon-client.exe" >> "$GITHUB_OUTPUT"
+              echo "cache=." >> "$GITHUB_OUTPUT"
+              ;;
+            native-mod-dev)
+              # Unoptimized game for native-mod work: rebuilds ~6x faster, game runs ~2x slower.
+              echo "manifest=Cargo.toml" >> "$GITHUB_OUTPUT"
+              echo "profile=dev" >> "$GITHUB_OUTPUT"
+              echo "package=-p horizon-game" >> "$GITHUB_OUTPUT"
+              echo "binary=target/debug/horizon-client.exe" >> "$GITHUB_OUTPUT"
+              echo "cache=." >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable, 2026-11
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: ${{ steps.select.outputs.cache }}
+          shared-key: fork-build-${{ steps.select.outputs.kind }}
+
+      - name: Static CRT for the release launcher
+        if: steps.select.outputs.kind == 'release'
+        run: echo "RUSTFLAGS=-C target-feature=+crt-static" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Build
+        shell: bash
+        run: cargo build --profile ${{ steps.select.outputs.profile }} --locked --manifest-path ${{ steps.select.outputs.manifest }} ${{ steps.select.outputs.package }}
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: horizon-${{ steps.select.outputs.kind }}-windows-x64-${{ github.sha }}
+          path: ${{ steps.select.outputs.binary }}
+          if-no-files-found: error
+          retention-days: 30
