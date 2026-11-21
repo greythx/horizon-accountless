@@ -132,7 +132,7 @@ fn stage(source: &Path, slot: &Path) -> io::Result<Guard> {
     // lease check needs the whole chain (game, slot, run) registered before it starts.
     // Startup backfill only covers slots that already existed, so publish the new one here.
     crate::run_leases::publish(&game)
-        .map_err(|e| io::Error::other(format!("register game runtime slot: {e:?}")))?;
+        .map_err(|e| io::Error::other(crate::native_mods::cache_error(e)))?;
     Ok(Guard {
         _slot: lock,
         _source: source_file,
